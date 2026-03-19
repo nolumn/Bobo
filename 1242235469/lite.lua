@@ -1341,4 +1341,686 @@ runFunction(function()
     end
 end)
 
+
+runFunction(function()
+    local defaultId = 'rbxassetid://3581383408'
+
+    local function getSoundFiles()
+        local files = {}
+        if isfolder('boba/library/sounds') then
+            for _, f in ipairs(listfiles('boba/library/sounds')) do
+                local name = f:match('([^/\\]+)$')
+                if name then table.insert(files, name) end
+            end
+        end
+        return #files > 0 and files or {'No sounds'}
+    end
+
+    local HitSound = tools:CreateToggle({
+        Name = "HitSound", CurrentValue = false, Flag = "hit_sound",
+        Callback = function(val)
+            if not val and lplr.axe then
+                local hitSounds = lplr.axe:FindFirstChild('hitSounds')
+                if hitSounds then
+                    local highStone = hitSounds:FindFirstChild('highStone')
+                    if highStone then
+                        highStone.SoundId = defaultId
+                        highStone.Volume = 0.5
+                    end
+                end
+            end
+        end
+    })
+
+    local HitSoundSourceDropdown = tools:CreateDropdown({
+        Name = "Sound Source",
+        Options = {'Asset ID', 'Library'},
+        CurrentOption = {'Asset ID'},
+        Flag = "hit_sound_source",
+        Callback = function() end
+    })
+
+    local HitSoundInput = tools:CreateInput({
+        Name = "Sound ID",
+        PlaceholderText = "rbxassetid://...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "hit_sound_id",
+        Callback = function(val)
+            if not HitSound.CurrentValue then return end
+            if HitSoundSourceDropdown.CurrentOption[1] ~= 'Asset ID' then return end
+            if not lplr.axe then return end
+            local hitSounds = lplr.axe:FindFirstChild('hitSounds')
+            if hitSounds then
+                local highStone = hitSounds:FindFirstChild('highStone')
+                if highStone and val ~= '' then
+                    highStone.SoundId = val:find('rbxassetid://') and val or 'rbxassetid://'..val
+                end
+            end
+        end
+    })
+
+    local libOpts = getSoundFiles()
+    local HitSoundLibDropdown = tools:CreateDropdown({
+        Name = "Library Sound",
+        Options = libOpts,
+        CurrentOption = {libOpts[1]},
+        Flag = "hit_sound_lib_file",
+        Callback = function() end
+    })
+
+    tools:CreateButton({
+        Name = "Refresh Library Sounds",
+        Callback = function()
+            local opts = getSoundFiles()
+            HitSoundLibDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    local HitSoundVolumeSlider = tools:CreateSlider({
+        Name = "Volume", Range = {0, 5}, Increment = 0.01, Suffix = "",
+        CurrentValue = 0.5, Flag = "hit_sound_volume", Callback = function() end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not lplr.axe then return end
+        local hitSounds = lplr.axe:FindFirstChild('hitSounds')
+        if not hitSounds then return end
+        local highStone = hitSounds:FindFirstChild('highStone')
+        local lowStone = hitSounds:FindFirstChild('lowStoneVariable')
+        if lowStone then lowStone.Volume = 0 end
+        if not HitSound.CurrentValue then return end
+        if not highStone then return end
+        highStone.Volume = HitSoundVolumeSlider.CurrentValue
+        if HitSoundSourceDropdown.CurrentOption[1] == 'Library' then
+            local selected = HitSoundLibDropdown.CurrentOption[1]
+            if selected and selected ~= 'No sounds' then
+                local path = 'boba/library/sounds/'..selected
+                if isfile(path) then
+                    local suc, asset = pcall(getcustomasset, path)
+                    if suc and asset and highStone.SoundId ~= asset then
+                        highStone.SoundId = asset
+                    end
+                end
+            end
+        end
+    end))
+end)
+
+runFunction(function()
+    if not isfolder('boba/library') then makefolder('boba/library') end
+    if not isfolder('boba/library/sounds') then makefolder('boba/library/sounds') end
+
+    local function getDownloadedFiles()
+        local files = {}
+        if isfolder('boba/library') then
+            for _, f in ipairs(listfiles('boba/library')) do
+                local name = f:match('([^/\\]+)$')
+                if name and not name:find('sounds') then table.insert(files, name) end
+            end
+        end
+        return #files > 0 and files or {'No files'}
+    end
+
+    library:CreateSection("Download")
+
+    local fileNameInput = library:CreateInput({
+        Name = "File Name",
+        PlaceholderText = "e.g. mysound.mp3 or script.lua",
+        RemoveTextAfterFocusLost = false,
+        Flag = "library_filename",
+        Callback = function() end
+    })
+
+    local fileUrlInput = library:CreateInput({
+        Name = "File URL",
+        PlaceholderText = "https://...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "library_url",
+        Callback = function() end
+    })
+
+    local isSoundToggle = library:CreateToggle({
+        Name = "Is Sound File",
+        CurrentValue = false,
+        Flag = "library_issound",
+        Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Download",
+        Callback = function()
+            local name = fileNameInput.CurrentValue
+            local url = fileUrlInput.CurrentValue
+            if not name or name == '' then notif('Library', 'Enter a file name.', 3) return end
+            if not url or url == '' then notif('Library', 'Enter a URL.', 3) return end
+            local suc, res = pcall(function() return game:HttpGet(url) end)
+            if not suc or not res or res == '' then
+                notif('Library', 'Failed to fetch: '..tostring(res), 5)
+                return
+            end
+            local path = isSoundToggle.CurrentValue
+                and 'boba/library/sounds/'..name
+                or 'boba/library/'..name
+            pcall(function() writefile(path, res) end)
+            notif('Library', 'Saved: '..name, 3)
+        end
+    })
+
+    library:CreateDivider()
+    library:CreateSection("Files")
+
+    local filesOptions = getDownloadedFiles()
+    local FilesDropdown = library:CreateDropdown({
+        Name = "Downloaded Files",
+        Options = filesOptions,
+        CurrentOption = {filesOptions[1]},
+        Flag = "library_files_dropdown",
+        Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Refresh Files",
+        Callback = function()
+            local opts = getDownloadedFiles()
+            FilesDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    library:CreateButton({
+        Name = "Delete Selected",
+        Callback = function()
+            local selected = FilesDropdown.CurrentOption[1]
+            if not selected or selected == 'No files' then return end
+            pcall(function() delfile('boba/library/'..selected) end)
+            notif('Library', 'Deleted: '..selected, 3)
+            local opts = getDownloadedFiles()
+            FilesDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    library:CreateButton({
+        Name = "Execute Selected",
+        Callback = function()
+            local selected = FilesDropdown.CurrentOption[1]
+            if not selected or selected == 'No files' then return end
+            local path = 'boba/library/'..selected
+            if not isfile(path) then notif('Library', 'File not found.', 3) return end
+            local suc, err = pcall(function() loadstring(readfile(path))() end)
+            if not suc then
+                notif('Library', 'Error: '..tostring(err), 6)
+            else
+                notif('Library', 'Executed: '..selected, 3)
+            end
+        end
+    })
+end)
+
+runFunction(function()
+    local function getSoundFiles()
+        local files = {}
+        if isfolder('boba/library/sounds') then
+            for _, f in ipairs(listfiles('boba/library/sounds')) do
+                local name = f:match('([^/\\]+)$')
+                if name then table.insert(files, name) end
+            end
+        end
+        return #files > 0 and files or {'No sounds'}
+    end
+
+    local musicSound = Instance.new('Sound')
+    musicSound.Parent = workspace
+    musicSound.Volume = 0.5
+    musicSound.Looped = true
+
+    local sfxSound = Instance.new('Sound')
+    sfxSound.Parent = workspace
+
+    local lastBeatTime = 0
+    local fovBeatCurrent = 70
+    local fovBeatTarget = 70
+
+    library:CreateDivider()
+    library:CreateSection("Music Player")
+
+    local MusicSourceDropdown = library:CreateDropdown({
+        Name = "Source",
+        Options = {'Library', 'Asset ID'},
+        CurrentOption = {'Library'},
+        Flag = "library_music_source",
+        Callback = function() end
+    })
+
+    local MusicAssetInput = library:CreateInput({
+        Name = "Asset ID",
+        PlaceholderText = "rbxassetid://...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "library_music_assetid",
+        Callback = function() end
+    })
+
+    local soundOpts = getSoundFiles()
+    local MusicDropdown = library:CreateDropdown({
+        Name = "Sound File",
+        Options = soundOpts,
+        CurrentOption = {soundOpts[1]},
+        Flag = "library_music_file",
+        Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Refresh Sounds",
+        Callback = function()
+            local opts = getSoundFiles()
+            MusicDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    local MusicVolumeSlider = library:CreateSlider({
+        Name = "Volume", Range = {0, 5}, Increment = 0.01, Suffix = "",
+        CurrentValue = 0.5, Flag = "library_music_volume", Callback = function() end
+    })
+
+    local MusicSpeedSlider = library:CreateSlider({
+        Name = "Speed", Range = {0.1, 4}, Increment = 0.01, Suffix = "",
+        CurrentValue = 1, Flag = "library_music_speed", Callback = function() end
+    })
+
+    local MusicStartAtSlider = library:CreateSlider({
+        Name = "Start At (seconds)", Range = {0, 600}, Increment = 0.1, Suffix = "",
+        CurrentValue = 0, Flag = "library_music_startat", Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Play",
+        Callback = function()
+            if MusicSourceDropdown.CurrentOption[1] == 'Asset ID' then
+                local id = MusicAssetInput.CurrentValue
+                if not id or id == '' then notif('Library', 'Enter an asset ID.', 3) return end
+                musicSound.SoundId = id:find('rbxassetid://') and id or 'rbxassetid://'..id
+            else
+                local selected = MusicDropdown.CurrentOption[1]
+                if not selected or selected == 'No sounds' then notif('Library', 'No sound selected.', 3) return end
+                local path = 'boba/library/sounds/'..selected
+                if not isfile(path) then notif('Library', 'File not found.', 3) return end
+                local suc, asset = pcall(getcustomasset, path)
+                if not suc then notif('Library', 'Failed to load asset.', 3) return end
+                musicSound.SoundId = asset
+            end
+            musicSound.Volume = MusicVolumeSlider.CurrentValue
+            musicSound.PlaybackSpeed = MusicSpeedSlider.CurrentValue
+            musicSound:Play()
+            musicSound.TimePosition = MusicStartAtSlider.CurrentValue
+        end
+    })
+
+    library:CreateButton({
+        Name = "Stop",
+        Callback = function() musicSound:Stop() end
+    })
+
+    library:CreateButton({
+        Name = "Pause / Resume",
+        Callback = function()
+            if musicSound.IsPlaying then musicSound:Pause() else musicSound:Resume() end
+        end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if musicSound.IsPlaying then
+            musicSound.Volume = MusicVolumeSlider.CurrentValue
+            musicSound.PlaybackSpeed = MusicSpeedSlider.CurrentValue
+        end
+    end))
+
+    library:CreateDivider()
+    library:CreateSection("Beat FOV")
+
+    local BeatFOVToggle = library:CreateToggle({
+        Name = "Beat FOV",
+        CurrentValue = false,
+        Flag = "library_beat_fov",
+        Callback = function(val)
+            if not val then
+                lplr.camera.FieldOfView = 70
+                fovBeatCurrent = 70
+            end
+        end
+    })
+
+    local BPMSlider = library:CreateSlider({
+        Name = "BPM", Range = {40, 300}, Increment = 1, Suffix = "",
+        CurrentValue = 120, Flag = "library_bpm", Callback = function() end
+    })
+
+    local BeatFOVPeakSlider = library:CreateSlider({
+        Name = "FOV on Beat", Range = {30, 150}, Increment = 1, Suffix = "",
+        CurrentValue = 90, Flag = "library_beat_fov_peak", Callback = function() end
+    })
+
+    local BeatFOVBaseSlider = library:CreateSlider({
+        Name = "FOV Base", Range = {30, 120}, Increment = 1, Suffix = "",
+        CurrentValue = 70, Flag = "library_beat_fov_base", Callback = function() end
+    })
+
+    local BeatFOVSmoothSlider = library:CreateSlider({
+        Name = "Return Smoothness", Range = {0.01, 1}, Increment = 0.01, Suffix = "",
+        CurrentValue = 0.15, Flag = "library_beat_fov_smooth", Callback = function() end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function(dt)
+        if not BeatFOVToggle.CurrentValue then return end
+        if sharedState.spectating then return end
+        local now = tick()
+        local beatInterval = 60 / BPMSlider.CurrentValue
+        if now - lastBeatTime >= beatInterval then
+            lastBeatTime = now
+            fovBeatTarget = BeatFOVPeakSlider.CurrentValue
+        else
+            fovBeatTarget = BeatFOVBaseSlider.CurrentValue
+        end
+        fovBeatCurrent = fovBeatCurrent + (fovBeatTarget - fovBeatCurrent) * math.clamp(BeatFOVSmoothSlider.CurrentValue * (dt * 60), 0, 1)
+        lplr.camera.FieldOfView = fovBeatCurrent
+    end))
+
+    library:CreateDivider()
+    library:CreateSection("Sound Effects")
+
+    local SFXSourceDropdown = library:CreateDropdown({
+        Name = "SFX Source",
+        Options = {'Library', 'Asset ID'},
+        CurrentOption = {'Library'},
+        Flag = "library_sfx_source",
+        Callback = function() end
+    })
+
+    local SFXAssetInput = library:CreateInput({
+        Name = "SFX Asset ID",
+        PlaceholderText = "rbxassetid://...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "library_sfx_assetid",
+        Callback = function() end
+    })
+
+    local sfxOpts = getSoundFiles()
+    local SFXDropdown = library:CreateDropdown({
+        Name = "Sound Effect File",
+        Options = sfxOpts,
+        CurrentOption = {sfxOpts[1]},
+        Flag = "library_sfx_file",
+        Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Refresh SFX",
+        Callback = function()
+            local opts = getSoundFiles()
+            SFXDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    local SFXVolumeSlider = library:CreateSlider({
+        Name = "SFX Volume", Range = {0, 5}, Increment = 0.01, Suffix = "",
+        CurrentValue = 1, Flag = "library_sfx_volume", Callback = function() end
+    })
+
+    local SFXSpeedSlider = library:CreateSlider({
+        Name = "SFX Speed", Range = {0.1, 4}, Increment = 0.01, Suffix = "",
+        CurrentValue = 1, Flag = "library_sfx_speed", Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Play SFX",
+        Callback = function()
+            if SFXSourceDropdown.CurrentOption[1] == 'Asset ID' then
+                local id = SFXAssetInput.CurrentValue
+                if not id or id == '' then notif('Library', 'Enter an asset ID.', 3) return end
+                sfxSound.SoundId = id:find('rbxassetid://') and id or 'rbxassetid://'..id
+            else
+                local selected = SFXDropdown.CurrentOption[1]
+                if not selected or selected == 'No sounds' then notif('Library', 'No sound selected.', 3) return end
+                local path = 'boba/library/sounds/'..selected
+                if not isfile(path) then notif('Library', 'File not found.', 3) return end
+                local suc, asset = pcall(getcustomasset, path)
+                if not suc then notif('Library', 'Failed to load.', 3) return end
+                sfxSound.SoundId = asset
+            end
+            sfxSound.Volume = SFXVolumeSlider.CurrentValue
+            sfxSound.PlaybackSpeed = SFXSpeedSlider.CurrentValue
+            sfxSound:Play()
+        end
+    })
+end)
+
+runFunction(function()
+    local function getSoundFiles()
+        local files = {}
+        if isfolder('boba/library/sounds') then
+            for _, f in ipairs(listfiles('boba/library/sounds')) do
+                local name = f:match('([^/\\]+)$')
+                if name then table.insert(files, name) end
+            end
+        end
+        return #files > 0 and files or {'No sounds'}
+    end
+
+    local playlist = {}
+    local currentIndex = 1
+    local playlistSound = Instance.new('Sound')
+    playlistSound.Parent = workspace
+    playlistSound.Volume = 0.5
+
+    local playlistActive = false
+
+    local function getPlaylistNames()
+        local names = {}
+        for _, entry in ipairs(playlist) do
+            table.insert(names, entry.name)
+        end
+        return #names > 0 and names or {'Empty'}
+    end
+
+    library:CreateDivider()
+    library:CreateSection("Playlist")
+
+    local PlaylistSourceDropdown = library:CreateDropdown({
+        Name = "Add Source",
+        Options = {'Library', 'Asset ID'},
+        CurrentOption = {'Library'},
+        Flag = "playlist_add_source",
+        Callback = function() end
+    })
+
+    local PlaylistAssetInput = library:CreateInput({
+        Name = "Asset ID to Add",
+        PlaceholderText = "rbxassetid://... and a name",
+        RemoveTextAfterFocusLost = false,
+        Flag = "playlist_asset_input",
+        Callback = function() end
+    })
+
+    local PlaylistAssetNameInput = library:CreateInput({
+        Name = "Display Name",
+        PlaceholderText = "e.g. Song 1",
+        RemoveTextAfterFocusLost = false,
+        Flag = "playlist_asset_name",
+        Callback = function() end
+    })
+
+    local soundOpts = getSoundFiles()
+    local PlaylistFileDropdown = library:CreateDropdown({
+        Name = "Library File to Add",
+        Options = soundOpts,
+        CurrentOption = {soundOpts[1]},
+        Flag = "playlist_file_dropdown",
+        Callback = function() end
+    })
+
+    library:CreateButton({
+        Name = "Refresh Library",
+        Callback = function()
+            local opts = getSoundFiles()
+            PlaylistFileDropdown:Refresh(opts, {opts[1]})
+        end
+    })
+
+    library:CreateButton({
+        Name = "Add to Playlist",
+        Callback = function()
+            if PlaylistSourceDropdown.CurrentOption[1] == 'Asset ID' then
+                local id = PlaylistAssetInput.CurrentValue
+                local name = PlaylistAssetNameInput.CurrentValue
+                if not id or id == '' then notif('Playlist', 'Enter an asset ID.', 3) return end
+                if not name or name == '' then name = id end
+                table.insert(playlist, {
+                    name = name,
+                    source = 'asset',
+                    id = id:find('rbxassetid://') and id or 'rbxassetid://'..id
+                })
+            else
+                local selected = PlaylistFileDropdown.CurrentOption[1]
+                if not selected or selected == 'No sounds' then notif('Playlist', 'No file selected.', 3) return end
+                table.insert(playlist, {
+                    name = selected,
+                    source = 'library',
+                    path = 'boba/library/sounds/'..selected
+                })
+            end
+            notif('Playlist', 'Added: '..(playlist[#playlist].name), 3)
+        end
+    })
+
+    local PlaylistVolumeSlider = library:CreateSlider({
+        Name = "Playlist Volume", Range = {0, 5}, Increment = 0.01, Suffix = "",
+        CurrentValue = 0.5, Flag = "playlist_volume", Callback = function() end
+    })
+
+    local PlaylistSpeedSlider = library:CreateSlider({
+        Name = "Playlist Speed", Range = {0.1, 4}, Increment = 0.01, Suffix = "",
+        CurrentValue = 1, Flag = "playlist_speed", Callback = function() end
+    })
+
+    local PlaylistQueueDropdown = library:CreateDropdown({
+        Name = "Current Playlist",
+        Options = {'Empty'},
+        CurrentOption = {'Empty'},
+        Flag = "playlist_queue",
+        Callback = function() end
+    })
+
+    local function refreshQueueDropdown()
+        local names = getPlaylistNames()
+        PlaylistQueueDropdown:Refresh(names, {names[1]})
+    end
+
+    library:CreateButton({
+        Name = "Refresh Queue View",
+        Callback = function() refreshQueueDropdown() end
+    })
+
+    library:CreateButton({
+        Name = "Remove Selected from Playlist",
+        Callback = function()
+            local selected = PlaylistQueueDropdown.CurrentOption[1]
+            if not selected or selected == 'Empty' then return end
+            for i, entry in ipairs(playlist) do
+                if entry.name == selected then
+                    table.remove(playlist, i)
+                    break
+                end
+            end
+            if currentIndex > #playlist then currentIndex = 1 end
+            refreshQueueDropdown()
+            notif('Playlist', 'Removed: '..selected, 3)
+        end
+    })
+
+    library:CreateButton({
+        Name = "Clear Playlist",
+        Callback = function()
+            playlist = {}
+            currentIndex = 1
+            playlistSound:Stop()
+            playlistActive = false
+            refreshQueueDropdown()
+            notif('Playlist', 'Cleared.', 3)
+        end
+    })
+
+    local function loadAndPlay(index)
+        if #playlist == 0 then return end
+        local entry = playlist[index]
+        if not entry then return end
+        if entry.source == 'asset' then
+            playlistSound.SoundId = entry.id
+        else
+            if not isfile(entry.path) then
+                notif('Playlist', 'File missing: '..entry.name, 3)
+                currentIndex = currentIndex % #playlist + 1
+                loadAndPlay(currentIndex)
+                return
+            end
+            local suc, asset = pcall(getcustomasset, entry.path)
+            if not suc then
+                notif('Playlist', 'Failed to load: '..entry.name, 3)
+                currentIndex = currentIndex % #playlist + 1
+                loadAndPlay(currentIndex)
+                return
+            end
+            playlistSound.SoundId = asset
+        end
+        playlistSound.Volume = PlaylistVolumeSlider.CurrentValue
+        playlistSound.PlaybackSpeed = PlaylistSpeedSlider.CurrentValue
+        playlistSound.Looped = false
+        playlistSound:Play()
+        notif('Playlist', 'Now playing: '..entry.name, 3)
+    end
+
+    library:CreateButton({
+        Name = "Play Playlist",
+        Callback = function()
+            if #playlist == 0 then notif('Playlist', 'Playlist is empty.', 3) return end
+            playlistActive = true
+            currentIndex = 1
+            loadAndPlay(currentIndex)
+        end
+    })
+
+    library:CreateButton({
+        Name = "Stop Playlist",
+        Callback = function()
+            playlistActive = false
+            playlistSound:Stop()
+        end
+    })
+
+    library:CreateButton({
+        Name = "Skip",
+        Callback = function()
+            if #playlist == 0 then return end
+            currentIndex = currentIndex % #playlist + 1
+            loadAndPlay(currentIndex)
+        end
+    })
+
+    library:CreateButton({
+        Name = "Previous",
+        Callback = function()
+            if #playlist == 0 then return end
+            currentIndex = ((currentIndex - 2) % #playlist) + 1
+            loadAndPlay(currentIndex)
+        end
+    })
+
+    cleanup.add(runService.Heartbeat:Connect(function()
+        if not playlistActive then return end
+        if #playlist == 0 then return end
+        if playlistSound.IsLoaded and not playlistSound.IsPlaying and not playlistSound.IsPaused then
+            currentIndex = currentIndex % #playlist + 1
+            loadAndPlay(currentIndex)
+        end
+        playlistSound.Volume = PlaylistVolumeSlider.CurrentValue
+        playlistSound.PlaybackSpeed = PlaylistSpeedSlider.CurrentValue
+    end))
+end)
+
 Rayfield:LoadConfiguration()
