@@ -159,7 +159,6 @@ local tools = Window:CreateTab("Tools", "wrench")
 local world = Window:CreateTab("World", "globe")
 local library = Window:CreateTab("Library", "download")
 
-
 chance(3, function()
     local bobotab = Window:CreateTab(({'bob','boba','bobo','blob','obob','boo'})[math.random(1,math.random(2,6))], libstuff.ico[math.random(1,#libstuff.ico)] or 16547078391)
     local canspeaktobobo = true
@@ -2340,110 +2339,6 @@ runFunction(function()
 end)
 
 runFunction(function()
-    local defaultId = 'rbxassetid://3581383408'
-
-    local function getSoundFiles()
-        local files = {}
-        if isfolder('boba/library/sounds') then
-            for _, f in ipairs(listfiles('boba/library/sounds')) do
-                local name = f:match('([^/\\]+)$')
-                if name then table.insert(files, name) end
-            end
-        end
-        return #files > 0 and files or {'No sounds'}
-    end
-
-    local HitSound = tools:CreateToggle({
-        Name = "HitSound", CurrentValue = false, Flag = "hit_sound",
-        Callback = function(val)
-            if not val and lplr.axe then
-                local hitSounds = lplr.axe:FindFirstChild('hitSounds')
-                if hitSounds then
-                    local highStone = hitSounds:FindFirstChild('highStone')
-                    if highStone then
-                        highStone.SoundId = defaultId
-                        highStone.Volume = 0.5
-                    end
-                end
-            end
-        end
-    })
-
-    local HitSoundSourceDropdown = tools:CreateDropdown({
-        Name = "Sound Source",
-        Options = {'Asset ID', 'Library'},
-        CurrentOption = {'Asset ID'},
-        Flag = "hit_sound_source",
-        Callback = function() end
-    })
-
-    local HitSoundInput = tools:CreateInput({
-        Name = "Sound ID",
-        PlaceholderText = "rbxassetid://...",
-        RemoveTextAfterFocusLost = false,
-        Flag = "hit_sound_id",
-        Callback = function(val)
-            if not HitSound.CurrentValue then return end
-            if HitSoundSourceDropdown.CurrentOption[1] ~= 'Asset ID' then return end
-            if not lplr.axe then return end
-            local hitSounds = lplr.axe:FindFirstChild('hitSounds')
-            if hitSounds then
-                local highStone = hitSounds:FindFirstChild('highStone')
-                if highStone and val ~= '' then
-                    highStone.SoundId = val:find('rbxassetid://') and val or 'rbxassetid://'..val
-                end
-            end
-        end
-    })
-
-    local libOpts = getSoundFiles()
-    local HitSoundLibDropdown = tools:CreateDropdown({
-        Name = "Library Sound",
-        Options = libOpts,
-        CurrentOption = {libOpts[1]},
-        Flag = "hit_sound_lib_file",
-        Callback = function() end
-    })
-
-    tools:CreateButton({
-        Name = "Refresh Library Sounds",
-        Callback = function()
-            local opts = getSoundFiles()
-            HitSoundLibDropdown:Refresh(opts, {opts[1]})
-        end
-    })
-
-    local HitSoundVolumeSlider = tools:CreateSlider({
-        Name = "Volume", Range = {0, 5}, Increment = 0.01, Suffix = "",
-        CurrentValue = 0.5, Flag = "hit_sound_volume", Callback = function() end
-    })
-
-    cleanup.add(runService.RenderStepped:Connect(function()
-        if not lplr.axe then return end
-        local hitSounds = lplr.axe:FindFirstChild('hitSounds')
-        if not hitSounds then return end
-        local highStone = hitSounds:FindFirstChild('highStone')
-        local lowStone = hitSounds:FindFirstChild('lowStoneVariable')
-        if lowStone then lowStone.Volume = 0 end
-        if not HitSound.CurrentValue then return end
-        if not highStone then return end
-        highStone.Volume = HitSoundVolumeSlider.CurrentValue
-        if HitSoundSourceDropdown.CurrentOption[1] == 'Library' then
-            local selected = HitSoundLibDropdown.CurrentOption[1]
-            if selected and selected ~= 'No sounds' then
-                local path = 'boba/library/sounds/'..selected
-                if isfile(path) then
-                    local suc, asset = pcall(getcustomasset, path)
-                    if suc and asset and highStone.SoundId ~= asset then
-                        highStone.SoundId = asset
-                    end
-                end
-            end
-        end
-    end))
-end)
-
-runFunction(function()
     if not isfolder('boba/library') then makefolder('boba/library') end
     if not isfolder('boba/library/sounds') then makefolder('boba/library/sounds') end
 
@@ -3021,4 +2916,4 @@ runFunction(function()
     end))
 end)
 
-Rayfield:LoadConfiguration() 
+Rayfield:LoadConfiguration()
