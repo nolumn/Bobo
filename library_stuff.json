@@ -1,4 +1,6 @@
 {
   "ico": 16547078391,
-  "developers": ["inner"]
+  "developers": ["inner", "bobo"],
+  "theme": "Default",
+  "toggle": "G"
 }
