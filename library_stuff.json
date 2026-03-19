@@ -3,5 +3,5 @@
   "developers": ["inner", "bobo"],
   "theme": "Default",
   "toggle": "G",
-  "messages": ["Bobo", "hey there", "bob", "hey man", "I see you", "cool address", "what color is your hair?", "you have a pretty smile :)", "why do you do this?", "when are you answering", "im scared"]
+  "messages": ["Bobo", "hey there", "bob", "hey man", "I see you", "cool address", "what color is your hair?", "you have a pretty smile :)", "why do you do this?", "when are you answering", "im scared", "you are %s, right?", "leave", "i hacked you lol", "hello %s", "you're on doxbin now!"]
 }
