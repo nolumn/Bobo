@@ -5,7 +5,7 @@ end
 local starterGui = cloneref(game:GetService('StarterGui'))
 
 local version = (loadver and tostring(loadver)) or 'main'
-local url = 'https://raw.githubusercontent.com/nolumn/Bobo/refs/heads/main/games/'..tostring(game.PlaceId)..'/'..version..'.lua'
+local url = 'https://raw.githubusercontent.com/nolumn/Bobo/refs/heads/main/'..tostring(game.PlaceId)..'/'..version..'.lua'
 
 local suc, res = pcall(function()
     return game:HttpGet(url)
