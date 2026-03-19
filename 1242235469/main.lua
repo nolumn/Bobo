@@ -2707,6 +2707,7 @@ runFunction(function()
     cleanup.add(runService.RenderStepped:Connect(function(dt)
         if not BeatFOVToggle.CurrentValue then return end
         if sharedState.spectating then return end
+        if not musicSound.IsPlaying then return end
         local now = tick()
         local beatInterval = 60 / BPMSlider.CurrentValue
         if now - lastBeatTime >= beatInterval then
