@@ -117,6 +117,7 @@ local sharedState = {
 local render = Window:CreateTab("Render", "palette")
 local tools = Window:CreateTab("Tools", "wrench")
 local world = Window:CreateTab("World", "globe")
+local library = Window:CreateTab("Library", "download")
 
 runFunction(function()
     local oldColor = nil
