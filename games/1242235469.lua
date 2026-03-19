@@ -138,7 +138,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = {
         Enabled = true,
         FolderName = 'boba',
-        FileName = tostring(game.PlaceId)..'/CONFIG_SAVE_'..tostring(new)
+        FileName = game.PlaceId -- eugh
     }
 })
 
@@ -155,6 +155,9 @@ local notif = function(title, desc, dur, ico)
         })
     end
 end
+local sharedState = {
+    spectating = false
+}
 
 local blatant = Window:CreateTab("Blatant", "swords")
 local render = Window:CreateTab("Render", "palette")
@@ -384,6 +387,8 @@ runFunction(function()
     local mouse = lplrObject:GetMouse()
     local transparencyLoop = nil
     local trajectoryParts = {}
+    local lastTapPos = nil
+    local isMobile = userInputService.TouchEnabled
 
     local clearTrajectory = function()
         for _, p in ipairs(trajectoryParts) do p:Destroy() end
@@ -394,7 +399,29 @@ runFunction(function()
         if not lplr.ball then return 0 end
         local screenPos, onScreen = lplr.camera:WorldToScreenPoint(lplr.ball.Position)
         if not onScreen then return 0 end
+        if isMobile and lastTapPos then
+            return (lastTapPos - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+        end
         return (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+    end
+
+    local getTapTarget = function()
+        if isMobile and lastTapPos then
+            local unitRay = lplr.camera:ScreenPointToRay(lastTapPos.X, lastTapPos.Y)
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            local ignored = {}
+            for _, plr in ipairs(playersService:GetPlayers()) do
+                if plr.Character then table.insert(ignored, plr.Character) end
+                local model = workspace.playerModels:FindFirstChild(plr.Name)
+                if model then table.insert(ignored, model) end
+            end
+            params.FilterDescendantsInstances = ignored
+            local ray = workspace:Raycast(unitRay.Origin, unitRay.Direction * 500, params)
+            if ray then return ray.Position end
+            return unitRay.Origin + unitRay.Direction * 50
+        end
+        return mouse.Hit.Position
     end
 
     local makeRaycastParams = function()
@@ -415,7 +442,7 @@ runFunction(function()
         if not lplr.ball then clearTrajectory() return end
         local dist2D = get2DDistance()
         local speed = math.clamp(dist2D / 20, 3, 25)
-        local target = mouse.Hit.Position
+        local target = getTapTarget()
         local direction = (target - lplr.ball.Position).Unit
         local velocity = direction * speed + Vector3.new(0, speed * 0.6, 0)
         local pos = lplr.ball.Position
@@ -547,20 +574,46 @@ runFunction(function()
         end
     })
 
-    cleanup.add(userInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == Enum.KeyCode.Space and Pogo.CurrentValue and isOnGround() and lplr.ball then
-            local dist2D = get2DDistance()
-            local speed = math.clamp(dist2D / 20, 3, 25)
-            local target = mouse.Hit.Position
-            local direction = (target - lplr.ball.Position).Unit
-            local bv = Instance.new('BodyVelocity')
-            bv.Velocity = direction * speed + Vector3.new(0, speed * 0.6, 0)
-            bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            bv.P = math.huge
-            bv.Parent = lplr.ball
-            task.delay(0.15, function() bv:Destroy() end)
-        end
-    end))
+    if isMobile then
+        cleanup.add(userInputService.TouchTap:Connect(function(touches, gpe)
+            if gpe or not Pogo.CurrentValue then return end
+            if touches[1] then
+                lastTapPos = touches[1].Position
+            end
+        end))
+
+        cleanup.add(userInputService.TouchStarted:Connect(function(touch, gpe)
+            if gpe or not Pogo.CurrentValue then return end
+            lastTapPos = touch.Position
+            if isOnGround() and lplr.ball then
+                local dist2D = get2DDistance()
+                local speed = math.clamp(dist2D / 20, 3, 25)
+                local target = getTapTarget()
+                local direction = (target - lplr.ball.Position).Unit
+                local bv = Instance.new('BodyVelocity')
+                bv.Velocity = direction * speed + Vector3.new(0, speed * 0.6, 0)
+                bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bv.P = math.huge
+                bv.Parent = lplr.ball
+                task.delay(0.15, function() bv:Destroy() end)
+            end
+        end))
+    else
+        cleanup.add(userInputService.InputBegan:Connect(function(input, gpe)
+            if not gpe and input.KeyCode == Enum.KeyCode.Space and Pogo.CurrentValue and isOnGround() and lplr.ball then
+                local dist2D = get2DDistance()
+                local speed = math.clamp(dist2D / 20, 3, 25)
+                local target = mouse.Hit.Position
+                local direction = (target - lplr.ball.Position).Unit
+                local bv = Instance.new('BodyVelocity')
+                bv.Velocity = direction * speed + Vector3.new(0, speed * 0.6, 0)
+                bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bv.P = math.huge
+                bv.Parent = lplr.ball
+                task.delay(0.15, function() bv:Destroy() end)
+            end
+        end))
+    end
 end)
 
 runFunction(function()
@@ -824,6 +877,7 @@ runFunction(function()
         Callback = function() end
     })
     cleanup.add(runService.RenderStepped:Connect(function()
+        if sharedState.spectating then return end
         lplr.camera.FieldOfView = FOVModifier.CurrentValue and FOVSlider.CurrentValue or 70
     end))
 end)
@@ -1215,44 +1269,85 @@ runFunction(function()
     local maxHistory = 300
     local backtracking = false
 
-    local BacktrackBind = blatant:CreateKeybind({
+    local getLastGroundedEntry = function()
+        for i = #history, 1, -1 do
+            if history[i].grounded then
+                return history[i]
+            end
+        end
+        return nil
+    end
+
+    local Backtrack = blatant:CreateToggle({
         Name = "Backtrack",
-        CurrentKeybind = "Q",
-        HoldToInteract = false,
-        Flag = "backtrack_key",
-        Callback = function()
-            if #history == 0 then return end
-            backtracking = true
-            task.spawn(function()
-                for i = #history, 1, -1 do
-                    if not lplr.model then break end
-                    lplr.model:PivotTo(history[i].cf)
-                    if lplr.ball then
-                        local bv = Instance.new('BodyVelocity')
-                        bv.Velocity = history[i].vel
-                        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                        bv.P = math.huge
-                        bv.Parent = lplr.ball
-                        task.delay(0.05, function() bv:Destroy() end)
-                    end
-                    task.wait(0.03)
-                end
-                backtracking = false
+        CurrentValue = false,
+        Flag = "backtrack_toggle",
+        Callback = function(val)
+            if not val then
                 history = {}
-            end)
+                backtracking = false
+            end
         end
     })
 
+    local BacktrackThreshold = blatant:CreateSlider({
+        Name = "Fall Threshold",
+        Range = {-100, -5},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = -20,
+        Flag = "backtrack_threshold",
+        Callback = function() end
+    })
+
     cleanup.add(runService.RenderStepped:Connect(function()
+        if not Backtrack.CurrentValue then return end
         if backtracking then return end
-        if lplr.model and lplr.ball then
-            table.insert(history, {
-                cf = lplr.model:GetPivot(),
-                vel = lplr.ball.AssemblyLinearVelocity
-            })
-            if #history > maxHistory then
-                table.remove(history, 1)
-            end
+        if not lplr.ball then return end
+
+        local vel = lplr.ball.AssemblyLinearVelocity
+
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local ignored = {}
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr.Character then table.insert(ignored, plr.Character) end
+            local model = workspace.playerModels:FindFirstChild(plr.Name)
+            if model then table.insert(ignored, model) end
+        end
+        params.FilterDescendantsInstances = ignored
+
+        local ballRay = workspace:Raycast(lplr.ball.Position, Vector3.new(0, -2, 0), params)
+        local isGrounded = ballRay ~= nil
+
+        table.insert(history, {
+            ballPos = lplr.ball.Position,
+            axePos = lplr.axe and lplr.axe.Position or nil,
+            grounded = isGrounded
+        })
+        if #history > maxHistory then
+            table.remove(history, 1)
+        end
+
+        if vel.Y < BacktrackThreshold.CurrentValue then
+            local entry = getLastGroundedEntry()
+            if not entry then return end
+            backtracking = true
+            task.spawn(function()
+                lplr.ball.CFrame = CFrame.new(entry.ballPos)
+                if lplr.axe and entry.axePos then
+                    lplr.axe.CFrame = CFrame.new(entry.axePos)
+                end
+                local bv = Instance.new('BodyVelocity')
+                bv.Velocity = Vector3.new(0, 0, 0)
+                bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bv.P = math.huge
+                bv.Parent = lplr.ball
+                task.delay(0.1, function() bv:Destroy() end)
+                task.wait(0.5)
+                backtracking = false
+                history = {}
+            end)
         end
     end))
 end)
@@ -1661,3 +1756,1058 @@ runFunction(function()
         end
     end))
 end)
+
+runFunction(function()
+    tools:CreateDivider()
+    local walking = false
+    local jumpDebounce = false
+
+    local Walk = tools:CreateToggle({
+        Name = "Walking",
+        CurrentValue = false,
+        Flag = "walking",
+        Callback = function(val)
+            walking = val
+            if not val and lplr.ball then
+                lplr.ball.Anchored = false
+            end
+        end
+    })
+
+    local WalkSpeedSlider = tools:CreateSlider({
+        Name = "Walk Speed",
+        Range = {1, 50},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 10,
+        Flag = "walk_speed",
+        Callback = function() end
+    })
+
+    local JumpPowerSlider = tools:CreateSlider({
+        Name = "Jump Power",
+        Range = {10, 100},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 40,
+        Flag = "walk_jump_power",
+        Callback = function() end
+    })
+
+    local isOnGround = function()
+        if not lplr.ball then return false end
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local ignored = {}
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr.Character then table.insert(ignored, plr.Character) end
+            local model = workspace.playerModels:FindFirstChild(plr.Name)
+            if model then table.insert(ignored, model) end
+        end
+        params.FilterDescendantsInstances = ignored
+        local ray = workspace:Raycast(lplr.ball.Position, Vector3.new(0, -2, 0), params)
+        return ray ~= nil
+    end
+
+    cleanup.add(runService.RenderStepped:Connect(function(dt)
+        if not Walk.CurrentValue then return end
+        if not lplr.ball then return end
+
+        local speed = WalkSpeedSlider.CurrentValue
+        local moveX = 0
+
+        local left = userInputService:IsKeyDown(Enum.KeyCode.A) or userInputService:IsKeyDown(Enum.KeyCode.Left)
+        local right = userInputService:IsKeyDown(Enum.KeyCode.D) or userInputService:IsKeyDown(Enum.KeyCode.Right)
+
+        if left then moveX = -speed end
+        if right then moveX = speed end
+
+        if moveX ~= 0 then
+            local vel = lplr.ball.AssemblyLinearVelocity
+            lplr.ball.AssemblyLinearVelocity = Vector3.new(moveX, vel.Y, vel.Z)
+        end
+    end))
+
+    cleanup.add(userInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if not Walk.CurrentValue then return end
+        if not lplr.ball then return end
+
+        if (input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.Space) then
+            if isOnGround() and not jumpDebounce then
+                jumpDebounce = true
+                local vel = lplr.ball.AssemblyLinearVelocity
+                lplr.ball.AssemblyLinearVelocity = Vector3.new(vel.X, JumpPowerSlider.CurrentValue, vel.Z)
+                task.delay(0.3, function() jumpDebounce = false end)
+            end
+        end
+    end))
+end)
+
+runFunction(function()
+    blatant:CreateDivider()
+
+    local AutoBounce = blatant:CreateToggle({
+        Name = "AutoBounce",
+        CurrentValue = false,
+        Flag = "autobounce",
+        Callback = function() end
+    })
+
+    local BounceStrengthSlider = blatant:CreateSlider({
+        Name = "Bounce Strength",
+        Range = {5, 100},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 40,
+        Flag = "autobounce_strength",
+        Callback = function() end
+    })
+
+    local BounceUpBiasSlider = blatant:CreateSlider({
+        Name = "Upward Bias",
+        Range = {0, 2},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.6,
+        Flag = "autobounce_upbias",
+        Callback = function() end
+    })
+
+    local debounce = false
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not AutoBounce.CurrentValue then return end
+        if not lplr.ball then return end
+        if debounce then return end
+
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        local ignored = {}
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr.Character then table.insert(ignored, plr.Character) end
+            local model = workspace.playerModels:FindFirstChild(plr.Name)
+            if model then table.insert(ignored, model) end
+        end
+        if lplr.model then table.insert(ignored, lplr.model) end
+        params.FilterDescendantsInstances = ignored
+
+        local ballRadius = lplr.ball.Size.X / 2
+        local castDist = ballRadius + 0.5
+
+        local hitSide = nil
+        local hitUp = false
+
+        for _, dir in ipairs({ Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0) }) do
+            local ray = workspace:Raycast(lplr.ball.Position, dir * castDist, params)
+            if ray and ray.Instance and ray.Instance.Transparency < 1 and ray.Instance.CanCollide then
+                hitSide = dir.X > 0 and 'right' or 'left'
+                break
+            end
+        end
+
+        local upRay = workspace:Raycast(lplr.ball.Position, Vector3.new(0, -(castDist), 0), params)
+        if upRay and upRay.Instance and upRay.Instance.Transparency < 1 and upRay.Instance.CanCollide then
+            hitUp = true
+        end
+
+        if hitSide or hitUp then
+            debounce = true
+            local strength = BounceStrengthSlider.CurrentValue
+            local bias = BounceUpBiasSlider.CurrentValue
+            local vel = lplr.ball.AssemblyLinearVelocity
+
+            local newX = vel.X
+            local newY = vel.Y
+
+            if hitSide then
+                newX = hitSide == 'right' and -strength or strength
+            end
+            if hitUp then
+                newY = strength * bias
+            end
+
+            lplr.ball.AssemblyLinearVelocity = Vector3.new(newX, newY, vel.Z)
+
+            if lplr.axe then
+                local axeOffset = lplr.axe.Position - lplr.ball.Position
+                lplr.axe.CFrame = CFrame.new(lplr.ball.Position + Vector3.new(
+                    hitSide and (newX * 0.1) or axeOffset.X,
+                    axeOffset.Y,
+                    axeOffset.Z
+                ))
+            end
+
+            task.delay(0.2, function() debounce = false end)
+        end
+    end))
+end)
+
+runFunction(function()
+    render:CreateDivider()
+
+    local screenGui = nil
+    local frame = nil
+    local label = nil
+    local uiCorner = nil
+    local uiStroke = nil
+    local uiScale = nil
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    local posFile = 'boba/' .. tostring(game.PlaceId) .. '/speedometer_pos.json'
+
+    local savePos = function()
+        if not frame then return end
+        pcall(function()
+            writefile(posFile, httpService:JSONEncode({
+                x = frame.Position.X.Offset,
+                y = frame.Position.Y.Offset,
+                xs = frame.Position.X.Scale,
+                ys = frame.Position.Y.Scale,
+            }))
+        end)
+    end
+
+    local loadPos = function()
+        pcall(function()
+            if isfile(posFile) then
+                local data = httpService:JSONDecode(readfile(posFile))
+                frame.Position = UDim2.new(data.xs or 0.5, data.x or -80, data.ys or 0, data.y or 120)
+            end
+        end)
+    end
+
+    local getTimerFrame = function()
+        local gui = lplrObject.PlayerGui:FindFirstChild('Timer')
+        if not gui then return nil end
+        return gui:FindFirstChild('timer')
+    end
+
+    local makeGui = function()
+        if screenGui then screenGui:Destroy() end
+
+        screenGui = Instance.new('ScreenGui')
+        screenGui.Name = 'SpeedometerGui'
+        screenGui.ResetOnSpawn = false
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        screenGui.Parent = lplrObject.PlayerGui
+
+        frame = Instance.new('Frame')
+        frame.Size = UDim2.new(0, 160, 0, 50)
+        frame.Position = UDim2.new(0.5, -80, 0, 120)
+        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        frame.BackgroundTransparency = 0.3
+        frame.BorderSizePixel = 0
+        frame.Parent = screenGui
+
+        uiCorner = Instance.new('UICorner')
+        uiCorner.CornerRadius = UDim.new(0, 8)
+        uiCorner.Parent = frame
+
+        uiStroke = Instance.new('UIStroke')
+        uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        uiStroke.Thickness = 1.5
+        uiStroke.Color = Color3.fromRGB(255, 255, 255)
+        uiStroke.Parent = frame
+
+        uiScale = Instance.new('UIScale')
+        uiScale.Scale = 1
+        uiScale.Parent = frame
+
+        label = Instance.new('TextLabel')
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextScaled = false
+        label.TextSize = 36
+        label.FontFace = Font.new('rbxasset://fonts/families/TitilliumWeb.json', Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+        label.Parent = frame
+
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = frame.Position
+            end
+        end)
+
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+                savePos()
+            end
+        end)
+
+        userInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale,
+                    startPos.X.Offset + delta.X,
+                    startPos.Y.Scale,
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+
+        loadPos()
+    end
+
+    local removeGui = function()
+        if screenGui then screenGui:Destroy() screenGui = nil end
+        frame = nil
+        label = nil
+        uiCorner = nil
+        uiStroke = nil
+        uiScale = nil
+    end
+
+    local positionAboveTimer = function()
+        if not frame then return end
+        local timerFrame = getTimerFrame()
+        if not timerFrame then return end
+        local timerPos = timerFrame.AbsolutePosition
+        local timerSize = timerFrame.AbsoluteSize
+        local w = frame.AbsoluteSize.X
+        frame.Position = UDim2.new(
+            0,
+            timerPos.X + (timerSize.X / 2) - (w / 2),
+            0,
+            timerPos.Y - frame.AbsoluteSize.Y - 6
+        )
+    end
+
+    local SpeedometerToggle = render:CreateToggle({
+        Name = "Speedometer",
+        CurrentValue = false,
+        Flag = "speedometer",
+        Callback = function(val)
+            if val then makeGui() else removeGui() end
+        end
+    })
+
+    local SpeedPositionDropdown = render:CreateDropdown({
+        Name = "Position",
+        Options = {'Draggable', 'Above Timer'},
+        CurrentOption = {'Draggable'},
+        Flag = "speedometer_position",
+        Callback = function() end
+    })
+
+    local SpeedColorLowPicker = render:CreateColorPicker({
+        Name = "Low Speed Color",
+        Color = Color3.fromRGB(255, 255, 255),
+        Flag = "speedometer_color_low",
+        Callback = function() end
+    })
+
+    local SpeedColorMidPicker = render:CreateColorPicker({
+        Name = "Mid Speed Color",
+        Color = Color3.fromRGB(255, 200, 0),
+        Flag = "speedometer_color_mid",
+        Callback = function() end
+    })
+
+    local SpeedColorHighPicker = render:CreateColorPicker({
+        Name = "High Speed Color",
+        Color = Color3.fromRGB(255, 50, 50),
+        Flag = "speedometer_color_high",
+        Callback = function() end
+    })
+
+    local SpeedColorMaxSlider = render:CreateSlider({
+        Name = "Max Speed (for color)",
+        Range = {10, 200},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 80,
+        Flag = "speedometer_max",
+        Callback = function() end
+    })
+
+    local SpeedBGTransparencySlider = render:CreateSlider({
+        Name = "Background Transparency",
+        Range = {0, 1},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.3,
+        Flag = "speedometer_bg_transparency",
+        Callback = function() end
+    })
+
+    local SpeedWidthSlider = render:CreateSlider({
+        Name = "Width",
+        Range = {50, 600},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 160,
+        Flag = "speedometer_width",
+        Callback = function() end
+    })
+
+    local SpeedHeightSlider = render:CreateSlider({
+        Name = "Height",
+        Range = {20, 300},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 50,
+        Flag = "speedometer_height",
+        Callback = function() end
+    })
+
+    local SpeedTextSizeSlider = render:CreateSlider({
+        Name = "Text Size",
+        Range = {8, 100},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 36,
+        Flag = "speedometer_text_size",
+        Callback = function() end
+    })
+
+    local SpeedScaleToggle = render:CreateToggle({
+        Name = "UIScale",
+        CurrentValue = false,
+        Flag = "speedometer_scale",
+        Callback = function(val)
+            if not val then
+                if uiScale then uiScale.Scale = 1 end
+            end
+        end
+    })
+
+    local SpeedScaleSlider = render:CreateSlider({
+        Name = "Scale",
+        Range = {0.1, 5},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 1,
+        Flag = "speedometer_scale_value",
+        Callback = function() end
+    })
+
+    local SpeedCornerToggle = render:CreateToggle({
+        Name = "Corner Radius",
+        CurrentValue = true,
+        Flag = "speedometer_corner",
+        Callback = function(val)
+            if not val then
+                if uiCorner then uiCorner:Destroy() uiCorner = nil end
+            end
+        end
+    })
+
+    local SpeedCornerSlider = render:CreateSlider({
+        Name = "Corner Radius Value",
+        Range = {0, 50},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 8,
+        Flag = "speedometer_corner_value",
+        Callback = function() end
+    })
+
+    local SpeedStrokeToggle = render:CreateToggle({
+        Name = "Border Stroke",
+        CurrentValue = false,
+        Flag = "speedometer_stroke",
+        Callback = function(val)
+            if not val then
+                if uiStroke then uiStroke:Destroy() uiStroke = nil end
+            end
+        end
+    })
+
+    local SpeedStrokeModeDropdown = render:CreateDropdown({
+        Name = "Stroke Color Mode",
+        Options = {'Rainbow', 'Color Picker'},
+        CurrentOption = {'Color Picker'},
+        Flag = "speedometer_stroke_mode",
+        Callback = function() end
+    })
+
+    local SpeedStrokeColorPicker = render:CreateColorPicker({
+        Name = "Stroke Color",
+        Color = Color3.fromRGB(255, 255, 255),
+        Flag = "speedometer_stroke_color",
+        Callback = function() end
+    })
+
+    local SpeedStrokeThicknessSlider = render:CreateSlider({
+        Name = "Stroke Thickness",
+        Range = {1, 10},
+        Increment = 0.1,
+        Suffix = "",
+        CurrentValue = 2,
+        Flag = "speedometer_stroke_thickness",
+        Callback = function() end
+    })
+
+    local SpeedFontDropdown = render:CreateDropdown({
+        Name = "Font",
+        Options = {
+            'Legacy', 'Arial', 'ArialBold', 'SourceSans', 'SourceSansBold',
+            'SourceSansSemibold', 'SourceSansItalic', 'SourceSansLight',
+            'SourceSansExtraLight', 'Bodoni', 'Highway', 'SciFi', 'Cartoon',
+            'Code', 'Fantasy', 'Antique', 'Gotham', 'GothamBold',
+            'GothamBlack', 'GothamMedium', 'GothamLight', 'AmaticSC',
+            'Bangers', 'Creepster', 'DenkOne', 'Fondamento', 'FredokaOne',
+            'GrenzeGotisch', 'IndieFlower', 'JosefinSans', 'Jura',
+            'KoHo', 'Kumbhsans', 'Mali', 'NotoSans', 'Nunito',
+            'Oswald', 'PatrickHand', 'PermanentMarker', 'Roboto',
+            'RobotoCondensed', 'RobotoMono', 'Sarpanch', 'SpecialElite',
+            'TitilliumWeb', 'Ubuntu'
+        },
+        CurrentOption = {'TitilliumWeb'},
+        Flag = "speedometer_font",
+        Callback = function() end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not SpeedometerToggle.CurrentValue then return end
+        if not label or not frame then return end
+
+        local speed = 0
+        if lplr.ball then
+            local vel = lplr.ball.AssemblyLinearVelocity
+            speed = Vector2.new(vel.X, vel.Y).Magnitude
+        end
+
+        local maxSpeed = SpeedColorMaxSlider.CurrentValue
+        local t = math.clamp(speed / maxSpeed, 0, 1)
+        local color
+        if t < 0.5 then
+            color = SpeedColorLowPicker.Color:Lerp(SpeedColorMidPicker.Color, t * 2)
+        else
+            color = SpeedColorMidPicker.Color:Lerp(SpeedColorHighPicker.Color, (t - 0.5) * 2)
+        end
+
+        label.TextColor3 = color
+        label.Text = string.format('%.2f', speed)
+        label.TextSize = SpeedTextSizeSlider.CurrentValue
+        pcall(function()
+            label.FontFace = Font.fromEnum(Enum.Font[SpeedFontDropdown.CurrentOption[1]])
+        end)
+
+        frame.BackgroundTransparency = SpeedBGTransparencySlider.CurrentValue
+        frame.Size = UDim2.new(0, SpeedWidthSlider.CurrentValue, 0, SpeedHeightSlider.CurrentValue)
+
+        if SpeedPositionDropdown.CurrentOption[1] == 'Above Timer' then
+            positionAboveTimer()
+        end
+
+        if SpeedCornerToggle.CurrentValue then
+            if not uiCorner then
+                uiCorner = frame:FindFirstChildOfClass('UICorner') or Instance.new('UICorner')
+                uiCorner.Parent = frame
+            end
+            uiCorner.CornerRadius = UDim.new(0, SpeedCornerSlider.CurrentValue)
+        else
+            if uiCorner then uiCorner:Destroy() uiCorner = nil end
+        end
+
+        if SpeedStrokeToggle.CurrentValue then
+            if not uiStroke then
+                uiStroke = Instance.new('UIStroke')
+                uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                uiStroke.Parent = frame
+            end
+            uiStroke.Color = SpeedStrokeModeDropdown.CurrentOption[1] == 'Rainbow' and returnRainbow() or SpeedStrokeColorPicker.Color
+            uiStroke.Thickness = SpeedStrokeThicknessSlider.CurrentValue
+        else
+            if uiStroke then uiStroke:Destroy() uiStroke = nil end
+        end
+
+        if SpeedScaleToggle.CurrentValue then
+            if not uiScale then
+                uiScale = Instance.new('UIScale')
+                uiScale.Parent = frame
+            end
+            uiScale.Scale = SpeedScaleSlider.CurrentValue
+        else
+            if uiScale then uiScale:Destroy() uiScale = nil end
+        end
+    end))
+end)
+
+runFunction(function()
+    blatant:CreateDivider()
+
+    local resolvedTarget = nil
+    local autoRefreshEnabled = true
+
+    local getPlayerOptions = function()
+        local options = {}
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr ~= lplrObject then
+                table.insert(options, plr.Name)
+            end
+        end
+        if #options == 0 then table.insert(options, 'No players') end
+        return options
+    end
+
+    local findPlayer = function(query)
+        if not query or query == '' then return nil end
+        query = query:lower()
+
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr ~= lplrObject and plr.Name:lower() == query then
+                return plr
+            end
+        end
+
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr ~= lplrObject and plr.Name:lower():find(query, 1, true) then
+                return plr
+            end
+        end
+
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr ~= lplrObject then
+                local initials = plr.Name:gsub('(%a)%l*', '%1'):lower()
+                if initials == query then
+                    return plr
+                end
+            end
+        end
+
+        return nil
+    end
+
+    local PlayerTPDropdown = blatant:CreateDropdown({
+        Name = "PlayerTP Target",
+        Options = getPlayerOptions(),
+        CurrentOption = {getPlayerOptions()[1]},
+        Flag = "playertp_target",
+        Callback = function(val)
+            resolvedTarget = val[1] ~= 'No players' and val[1] or nil
+        end
+    })
+
+    local refreshDropdown = function()
+        local options = getPlayerOptions()
+        local current = resolvedTarget
+        local newCurrent = nil
+        for _, o in ipairs(options) do
+            if o == current then newCurrent = o break end
+        end
+        if not newCurrent then newCurrent = options[1] end
+        PlayerTPDropdown:Refresh(options, {newCurrent})
+        resolvedTarget = newCurrent ~= 'No players' and newCurrent or nil
+    end
+
+    local AutoRefreshToggle = blatant:CreateToggle({
+        Name = "Auto Refresh Players",
+        CurrentValue = true,
+        Flag = "playertp_autorefresh",
+        Callback = function(val)
+            autoRefreshEnabled = val
+        end
+    })
+
+    blatant:CreateButton({
+        Name = "Refresh Players",
+        Callback = function()
+            refreshDropdown()
+        end
+    })
+
+    blatant:CreateInput({
+        Name = "Search Player",
+        PlaceholderText = "name, partial, or initials...",
+        RemoveTextAfterFocusLost = false,
+        Flag = "playertp_search",
+        Callback = function(val)
+            local plr = findPlayer(val)
+            if plr then
+                resolvedTarget = plr.Name
+                local options = getPlayerOptions()
+                PlayerTPDropdown:Refresh(options, {plr.Name})
+            else
+                resolvedTarget = nil
+            end
+        end
+    })
+
+    local doTP = function()
+        if not resolvedTarget then return end
+        local targetModel = workspace.playerModels:FindFirstChild(resolvedTarget)
+        if not targetModel then return end
+        local targetBall = targetModel:FindFirstChild('ball')
+        if not targetBall then return end
+        if lplr.ball then
+            lplr.ball.CFrame = targetBall.CFrame + Vector3.new(0, 3, 0)
+        end
+        if lplr.axe then
+            lplr.axe.CFrame = targetBall.CFrame + Vector3.new(2, 3, 0)
+        end
+    end
+
+    blatant:CreateButton({
+        Name = "Teleport",
+        Callback = doTP
+    })
+
+    local PlayerTPToggle = blatant:CreateToggle({
+        Name = "Stay on Player",
+        CurrentValue = false,
+        Flag = "playertp_stay",
+        Callback = function() end
+    })
+
+    cleanup.add(playersService.PlayerAdded:Connect(function()
+        if autoRefreshEnabled then refreshDropdown() end
+    end))
+
+    cleanup.add(playersService.PlayerRemoving:Connect(function()
+        if autoRefreshEnabled then
+            task.wait(0.1)
+            refreshDropdown()
+        end
+    end))
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not PlayerTPToggle.CurrentValue then return end
+        doTP()
+    end))
+end)
+
+runFunction(function()
+    tools:CreateDivider()
+
+    local currentCF = nil
+    local currentFOV = 60
+    local currentOffsetX = 4
+    local smoothAxeVelX = 0
+    local wallCheckParts = {}
+
+    local getPlayerOptions = function()
+        local options = {}
+        for _, plr in ipairs(playersService:GetPlayers()) do
+            if plr ~= lplrObject then
+                table.insert(options, plr.Name)
+            end
+        end
+        if #options == 0 then table.insert(options, 'No players') end
+        return options
+    end
+
+    local SpectateDropdown = tools:CreateDropdown({
+        Name = "Spectate Target",
+        Options = getPlayerOptions(),
+        CurrentOption = {getPlayerOptions()[1]},
+        Flag = "spectate_target",
+        Callback = function() end
+    })
+
+    tools:CreateButton({
+        Name = "Refresh Players",
+        Callback = function()
+            local options = getPlayerOptions()
+            SpectateDropdown:Refresh(options, {options[1]})
+        end
+    })
+
+    local SpectateSmoothSlider = tools:CreateSlider({
+        Name = "Camera Smoothness",
+        Range = {0.01, 1},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.06,
+        Flag = "spectate_smooth",
+        Callback = function() end
+    })
+
+    local SpectateOffsetXSlider = tools:CreateSlider({
+        Name = "Camera Offset X",
+        Range = {-20, 20},
+        Increment = 0.1,
+        Suffix = "",
+        CurrentValue = 4,
+        Flag = "spectate_offset_x",
+        Callback = function() end
+    })
+
+    local SpectateOffsetYSlider = tools:CreateSlider({
+        Name = "Camera Offset Y",
+        Range = {-20, 20},
+        Increment = 0.1,
+        Suffix = "",
+        CurrentValue = 3,
+        Flag = "spectate_offset_y",
+        Callback = function() end
+    })
+
+    local SpectateOffsetZSlider = tools:CreateSlider({
+        Name = "Camera Distance",
+        Range = {-60, -5},
+        Increment = 0.1,
+        Suffix = "",
+        CurrentValue = -20,
+        Flag = "spectate_offset_z",
+        Callback = function() end
+    })
+
+    local SpectateFOVSlider = tools:CreateSlider({
+        Name = "Spectate FOV",
+        Range = {30, 120},
+        Increment = 1,
+        Suffix = "",
+        CurrentValue = 60,
+        Flag = "spectate_fov",
+        Callback = function() end
+    })
+
+    local SpectateVelocityFOVToggle = tools:CreateToggle({
+        Name = "Velocity FOV",
+        CurrentValue = false,
+        Flag = "spectate_velocity_fov",
+        Callback = function() end
+    })
+
+    local SpectateHammerInfluenceToggle = tools:CreateToggle({
+        Name = "Hammer Influence on Camera",
+        CurrentValue = true,
+        Flag = "spectate_hammer_influence",
+        Callback = function() end
+    })
+
+    local SpectateHammerStrengthSlider = tools:CreateSlider({
+        Name = "Hammer Influence Strength",
+        Range = {0.01, 1},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.15,
+        Flag = "spectate_hammer_strength",
+        Callback = function() end
+    })
+
+    local SpectateHammerRotToggle = tools:CreateToggle({
+        Name = "Velocity Camera Drift",
+        CurrentValue = false,
+        Flag = "spectate_hammer_rot",
+        Callback = function() end
+    })
+
+    local SpectateHammerRotStrengthSlider = tools:CreateSlider({
+        Name = "Drift Strength",
+        Range = {0.01, 0.5},
+        Increment = 0.01,
+        Suffix = "",
+        CurrentValue = 0.08,
+        Flag = "spectate_hammer_rot_strength",
+        Callback = function() end
+    })
+
+    local revertWallParts = function()
+        for part, data in pairs(wallCheckParts) do
+            pcall(function()
+                tweenService:Create(part, TweenInfo.new(0.4), {Transparency = data.transparency}):Play()
+                for _, child in ipairs(part:GetChildren()) do
+                    if child:IsA('Texture') or child:IsA('Decal') then
+                        tweenService:Create(child, TweenInfo.new(0.4), {Transparency = data.childTransparencies[child] or 0}):Play()
+                    end
+                end
+            end)
+        end
+        wallCheckParts = {}
+    end
+
+    local SpectateWallCheckToggle = tools:CreateToggle({
+        Name = "Wall Check",
+        CurrentValue = false,
+        Flag = "spectate_wall_check",
+        Callback = function(val)
+            if not val then revertWallParts() end
+        end
+    })
+
+    local SpectateToggle = tools:CreateToggle({
+        Name = "Spectate",
+        CurrentValue = false,
+        Flag = "spectate_toggle",
+        Callback = function(val)
+            sharedState.spectating = val
+            if val then
+                lplr.camera.CameraType = Enum.CameraType.Scriptable
+                currentCF = lplr.camera.CFrame
+            else
+                lplr.camera.CameraType = Enum.CameraType.Custom
+                lplr.camera.CameraSubject = lplr.ball
+                lplr.camera.FieldOfView = 70
+                currentCF = nil
+                currentFOV = 60
+                currentOffsetX = SpectateOffsetXSlider.CurrentValue
+                smoothAxeVelX = 0
+
+                revertWallParts()
+
+                if lplr.ball then lplr.ball.Transparency = 0 end
+                if lplr.axe then
+                    lplr.axe.Transparency = 0
+                    local handle = lplr.axe:FindFirstChild('handle')
+                    if handle then handle.Transparency = 0 end
+                end
+
+                local lastTargetName = SpectateDropdown.CurrentOption[1]
+                local lastModel = lastTargetName ~= 'No players' and workspace.playerModels:FindFirstChild(lastTargetName) or nil
+                if lastModel then
+                    local b = lastModel:FindFirstChild('ball')
+                    local a = lastModel:FindFirstChild('axe')
+                    if b then b.Transparency = 0.6 end
+                    if a then
+                        a.Transparency = 0.6
+                        local h = a:FindFirstChild('handle')
+                        if h then h.Transparency = 0.6 end
+                    end
+                end
+            end
+        end
+    })
+
+    cleanup.add(playersService.PlayerAdded:Connect(function()
+        local options = getPlayerOptions()
+        SpectateDropdown:Refresh(options, {options[1]})
+    end))
+
+    cleanup.add(playersService.PlayerRemoving:Connect(function()
+        task.wait(0.1)
+        local options = getPlayerOptions()
+        SpectateDropdown:Refresh(options, {options[1]})
+    end))
+
+    cleanup.add(runService.RenderStepped:Connect(function(dt)
+        if not sharedState.spectating then return end
+
+        local targetName = SpectateDropdown.CurrentOption[1]
+        if targetName == 'No players' then return end
+
+        local targetModel = workspace.playerModels:FindFirstChild(targetName)
+        if not targetModel then return end
+
+        local targetBall = targetModel:FindFirstChild('ball')
+        local targetAxe = targetModel:FindFirstChild('axe')
+        if not targetBall then return end
+
+        if lplr.ball then lplr.ball.Transparency = 0.6 end
+        if lplr.axe then
+            lplr.axe.Transparency = 0.6
+            local handle = lplr.axe:FindFirstChild('handle')
+            if handle then handle.Transparency = 0.6 end
+        end
+
+        targetBall.Transparency = 0
+        if targetAxe then
+            targetAxe.Transparency = 0
+            local targetHandle = targetAxe:FindFirstChild('handle')
+            if targetHandle then targetHandle.Transparency = 0 end
+        end
+
+        if SpectateWallCheckToggle.CurrentValue then
+            local rayOrigin = lplr.camera.CFrame.Position
+            local rayTarget = targetBall.Position - rayOrigin
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            local ignored = {}
+            for _, plr in ipairs(playersService:GetPlayers()) do
+                if plr.Character then table.insert(ignored, plr.Character) end
+                local model = workspace.playerModels:FindFirstChild(plr.Name)
+                if model then table.insert(ignored, model) end
+            end
+            params.FilterDescendantsInstances = ignored
+
+            local newHit = {}
+            local ray = workspace:Raycast(rayOrigin, rayTarget, params)
+            if ray and ray.Instance then
+                local part = ray.Instance
+                if not wallCheckParts[part] then
+                    local childTransparencies = {}
+                    for _, child in ipairs(part:GetChildren()) do
+                        if child:IsA('Texture') or child:IsA('Decal') then
+                            childTransparencies[child] = child.Transparency
+                        end
+                    end
+                    wallCheckParts[part] = {
+                        transparency = part.Transparency,
+                        childTransparencies = childTransparencies
+                    }
+                end
+                newHit[part] = true
+                tweenService:Create(part, TweenInfo.new(0.3), {Transparency = 0.7}):Play()
+                for _, child in ipairs(part:GetChildren()) do
+                    if child:IsA('Texture') or child:IsA('Decal') then
+                        tweenService:Create(child, TweenInfo.new(0.3), {Transparency = 0.7}):Play()
+                    end
+                end
+            end
+
+            for part, data in pairs(wallCheckParts) do
+                if not newHit[part] then
+                    pcall(function()
+                        tweenService:Create(part, TweenInfo.new(0.4), {Transparency = data.transparency}):Play()
+                        for _, child in ipairs(part:GetChildren()) do
+                            if child:IsA('Texture') or child:IsA('Decal') then
+                                tweenService:Create(child, TweenInfo.new(0.4), {Transparency = data.childTransparencies[child] or 0}):Play()
+                            end
+                        end
+                    end)
+                    wallCheckParts[part] = nil
+                end
+            end
+        end
+
+        local focusPos = targetBall.Position
+        if targetAxe then
+            focusPos = targetBall.Position:Lerp(targetAxe.Position, 0.35)
+        end
+
+        local offsetX = SpectateOffsetXSlider.CurrentValue
+        local offsetY = SpectateOffsetYSlider.CurrentValue
+
+        if SpectateHammerInfluenceToggle.CurrentValue and targetAxe then
+            local axeOffset = targetAxe.Position - targetBall.Position
+            local strength = SpectateHammerStrengthSlider.CurrentValue
+            offsetX = offsetX + axeOffset.X * strength
+            offsetY = offsetY + axeOffset.Y * strength
+        end
+
+        if SpectateHammerRotToggle.CurrentValue then
+            local vel = targetBall.AssemblyLinearVelocity
+            local rotStrength = SpectateHammerRotStrengthSlider.CurrentValue
+            smoothAxeVelX = smoothAxeVelX + (vel.X - smoothAxeVelX) * math.clamp(0.1 * (dt * 60), 0, 1)
+            currentOffsetX = currentOffsetX + (offsetX + smoothAxeVelX * rotStrength - currentOffsetX) * math.clamp(0.05 * (dt * 60), 0, 1)
+            offsetX = currentOffsetX
+        else
+            currentOffsetX = offsetX
+        end
+
+        local targetCF = CFrame.new(
+            focusPos + Vector3.new(offsetX, offsetY, SpectateOffsetZSlider.CurrentValue),
+            focusPos
+        )
+
+        if not currentCF then currentCF = targetCF end
+
+        local smooth = math.clamp(SpectateSmoothSlider.CurrentValue * (dt * 60), 0, 1)
+        currentCF = currentCF:Lerp(targetCF, smooth)
+        lplr.camera.CFrame = currentCF
+
+        local targetFOV
+        if SpectateVelocityFOVToggle.CurrentValue then
+            local vel = targetBall.AssemblyLinearVelocity
+            local speed = Vector2.new(vel.X, vel.Y).Magnitude
+            local t = math.clamp(speed / 50, 0, 1)
+            targetFOV = 70 + (120 - 70) * t
+        else
+            targetFOV = SpectateFOVSlider.CurrentValue
+        end
+
+        currentFOV = currentFOV + (targetFOV - currentFOV) * math.clamp(0.08 * (dt * 60), 0, 1)
+        lplr.camera.FieldOfView = currentFOV
+    end))
+end)
+
+Rayfield:LoadConfiguration() --- so it wasn't a glitch, just my stupidity.
