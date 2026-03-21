@@ -2192,7 +2192,11 @@ runFunction(function()
     end
 
     local setHatTransparency = function(val)
-        local hat = lplr.visuals and lplr.visuals:FindFirstChild('Hat')
+        local model = lplr.model
+        if not model then return end
+        local visualFolder = model:FindFirstChild('visualFolder')
+        if not visualFolder then return end
+        local hat = visualFolder:FindFirstChild('Hat')
         if not hat then return end
         for _, part in ipairs(getAllParts(hat)) do
             pcall(function() part.Transparency = val end)
