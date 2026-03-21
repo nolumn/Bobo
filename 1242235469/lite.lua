@@ -2035,4 +2035,143 @@ runFunction(function()
     end))
 end)
 
+runFunction(function()
+    render:CreateDivider()
+
+    local snowballs = {}
+    local active = false
+
+    local SnowToggle = render:CreateToggle({
+        Name = 'Snowflakes',
+        CurrentValue = false,
+        Flag = 'snow_toggle',
+        Callback = function(val)
+            active = val
+            if not val then
+                for _, b in ipairs(snowballs) do
+                    pcall(function() b:Destroy() end)
+                end
+                snowballs = {}
+            end
+        end
+    })
+    local SnowAmount = render:CreateSlider({
+        Name = 'Amount', Range = {1, 200}, Increment = 1, Suffix = '',
+        CurrentValue = 80, Flag = 'snow_amount', Callback = function() end
+    })
+    local SnowSize = render:CreateSlider({
+        Name = 'Size', Range = {1, 20}, Increment = 0.1, Suffix = '',
+        CurrentValue = 1, Flag = 'snow_size', Callback = function() end
+    })
+    local SnowSpeed = render:CreateSlider({
+        Name = 'Speed', Range = {1, 50}, Increment = 0.1, Suffix = '',
+        CurrentValue = 6, Flag = 'snow_speed', Callback = function() end
+    })
+    local SnowDrift = render:CreateSlider({
+        Name = 'Drift Strength', Range = {0, 5}, Increment = 0.01, Suffix = '',
+        CurrentValue = 0.3, Flag = 'snow_drift', Callback = function() end
+    })
+    local SnowTransparency = render:CreateSlider({
+        Name = 'Transparency', Range = {0, 1}, Increment = 0.01, Suffix = '',
+        CurrentValue = 0, Flag = 'snow_transparency', Callback = function() end
+    })
+    local SnowSpread = render:CreateSlider({
+        Name = 'Spread', Range = {10, 500}, Increment = 1, Suffix = '',
+        CurrentValue = 150, Flag = 'snow_spread', Callback = function() end
+    })
+    local SnowHeight = render:CreateSlider({
+        Name = 'Spawn Height', Range = {10, 300}, Increment = 1, Suffix = '',
+        CurrentValue = 100, Flag = 'snow_height', Callback = function() end
+    })
+    local SnowColorMode = render:CreateDropdown({
+        Name = 'Color Mode', Options = {'White', 'Rainbow', 'Color Picker'},
+        CurrentOption = {'White'}, Flag = 'snow_color_mode', Callback = function() end
+    })
+    local SnowColorPicker = render:CreateColorPicker({
+        Name = 'Snow Color', Color = Color3.fromRGB(255, 255, 255),
+        Flag = 'snow_color_picker', Callback = function() end
+    })
+    local SnowMaterial = render:CreateDropdown({
+        Name = 'Material', Options = {'SmoothPlastic', 'Neon', 'Glass', 'Ice', 'ForceField'},
+        CurrentOption = {'SmoothPlastic'}, Flag = 'snow_material', Callback = function() end
+    })
+
+    local function getOrigin()
+        if lplr.rootPart then return lplr.rootPart.Position end
+        return Vector3.new(0, 0, 0)
+    end
+
+    local function spawnBall()
+        local origin = getOrigin()
+        local spread = SnowSpread.CurrentValue
+        local height = SnowHeight.CurrentValue
+        local ball = Instance.new('Part')
+        ball.Shape = Enum.PartType.Ball
+        local s = SnowSize.CurrentValue * (0.5 + math.random() * 1.0)
+        ball.Size = Vector3.new(s, s, s)
+        ball.Anchored = true
+        ball.CanCollide = false
+        ball.CastShadow = false
+        ball.Transparency = SnowTransparency.CurrentValue
+        pcall(function() ball.Material = Enum.Material[SnowMaterial.CurrentOption[1]] end)
+        ball.Color = Color3.fromRGB(255, 255, 255)
+        ball.Position = Vector3.new(
+            origin.X + math.random(-spread, spread),
+            origin.Y + height + math.random(0, 40),
+            origin.Z + math.random(-spread, spread)
+        )
+        ball.Parent = workspace
+        return ball
+    end
+
+    local function syncCount()
+        local target = SnowAmount.CurrentValue
+        while #snowballs < target do
+            table.insert(snowballs, spawnBall())
+        end
+        while #snowballs > target do
+            local b = table.remove(snowballs)
+            pcall(function() b:Destroy() end)
+        end
+    end
+
+    cleanup.add(runService.Heartbeat:Connect(function(dt)
+        if not active then return end
+        syncCount()
+        local origin = getOrigin()
+        local mode = SnowColorMode.CurrentOption[1]
+        local spread = SnowSpread.CurrentValue
+        local height = SnowHeight.CurrentValue
+        for _, b in ipairs(snowballs) do
+            pcall(function()
+                local speed = SnowSpeed.CurrentValue * (0.8 + b.Size.X * 0.2)
+                local drift = math.sin(tick() + b.Position.X * 0.5) * SnowDrift.CurrentValue
+                b.Position = Vector3.new(
+                    b.Position.X + drift * dt,
+                    b.Position.Y - speed * dt,
+                    b.Position.Z
+                )
+                b.Transparency = SnowTransparency.CurrentValue
+                pcall(function() b.Material = Enum.Material[SnowMaterial.CurrentOption[1]] end)
+                if mode == 'Rainbow' then
+                    b.Color = returnRainbow()
+                elseif mode == 'Color Picker' then
+                    b.Color = SnowColorPicker.Color
+                else
+                    b.Color = Color3.fromRGB(255, 255, 255)
+                end
+                if b.Position.Y < origin.Y - 20 then
+                    local s = SnowSize.CurrentValue * (0.5 + math.random() * 1.0)
+                    b.Size = Vector3.new(s, s, s)
+                    b.Position = Vector3.new(
+                        origin.X + math.random(-spread, spread),
+                        origin.Y + height + math.random(0, 40),
+                        origin.Z + math.random(-spread, spread)
+                    )
+                end
+            end)
+        end
+    end))
+end)
+
 Rayfield:LoadConfiguration()
