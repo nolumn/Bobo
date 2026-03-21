@@ -2314,6 +2314,65 @@ runFunction(function()
 end)
 
 runFunction(function()
+    render:CreateDivider()
+
+    local part = Instance.new('Part')
+    part.Anchored = true
+    part.CanCollide = false
+    part.CastShadow = false
+    part.Transparency = 1
+    part.Size = Vector3.new(0.1, 0.57, 0.1)
+    part.Material = Enum.Material.Neon
+    part.Parent = workspace
+
+    local BladeToggle = render:CreateToggle({
+        Name = 'Blade',
+        CurrentValue = false,
+        Flag = 'blade_toggle',
+        Callback = function(val)
+            if not val then part.Transparency = 1 end
+        end,
+    })
+
+    local BladeModeDropdown = render:CreateDropdown({
+        Name = 'Blade Color Mode',
+        Options = {'Rainbow', 'Color Picker', 'Ball Color'},
+        CurrentOption = {'Rainbow'},
+        Flag = 'blade_color_mode',
+        Callback = function() end,
+    })
+
+    local BladeColorPicker = render:CreateColorPicker({
+        Name = 'Blade Color',
+        Color = Color3.fromRGB(255, 80, 80),
+        Flag = 'blade_color',
+        Callback = function() end,
+    })
+
+    local BladeMaterialDropdown = render:CreateDropdown({
+        Name = 'Blade Material',
+        Options = {'Neon', 'SmoothPlastic', 'Metal', 'Glass', 'ForceField'},
+        CurrentOption = {'Neon'},
+        Flag = 'blade_material',
+        Callback = function() end,
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not BladeToggle.CurrentValue or not lplr.axe then part.Transparency = 1 return end
+        part.Transparency = 0
+        part.Size = Vector3.new(0.1, 0.57, 0.1)
+        part.CFrame = lplr.axe.CFrame * CFrame.new(0.59, -0.08, 0) * CFrame.Angles(0, 0, 0)
+        local mode = BladeModeDropdown.CurrentOption[1]
+        part.Color = mode == 'Rainbow' and returnRainbow()
+            or mode == 'Ball Color' and (lplr.ball and lplr.ball.Color or Color3.new(1,1,1))
+            or BladeColorPicker.Color
+        pcall(function() part.Material = Enum.Material[BladeMaterialDropdown.CurrentOption[1]] end)
+    end))
+
+    cleanup.add({ Destroy = function() part:Destroy() end })
+end)
+
+runFunction(function()
     if not isfolder('boba/library') then makefolder('boba/library') end
     if not isfolder('boba/library/sounds') then makefolder('boba/library/sounds') end
 
