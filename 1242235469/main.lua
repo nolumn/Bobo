@@ -3287,4 +3287,365 @@ runFunction(function()
     cleanup.add({ Destroy = function() destroyClones() end })
 end)
 
+runFunction(function()
+    render:CreateDivider()
+
+    local Avatars = {
+        ['Famibos'] = {
+            hat = 'wizard hat',
+            ballColor = Color3.fromRGB(218, 163, 108),
+            ballMaterial = 'Marble',
+            axeTipColor = Color3.fromRGB(176, 176, 176),
+            axeHandleColor = Color3.fromRGB(144, 118, 99),
+        },
+        ['J D'] = {
+            hat = 'no hat',
+            ballColor = Color3.fromRGB(255, 152, 220),
+            ballMaterial = 'Plastic',
+            axeTipColor = Color3.fromRGB(163, 162, 165),
+            axeHandleColor = Color3.fromRGB(159, 137, 103),
+        },
+        ['ii_Spectre (Old)'] = {
+            hat = 'no hat',
+            ballColor = Color3.fromRGB(203, 76, 76),
+            ballMaterial = 'Granite',
+            axeTipColor = Color3.fromRGB(221, 67, 67),
+            axeHandleColor = Color3.fromRGB(159, 137, 103),
+            blade = { color = Color3.fromRGB(167, 167, 167), material = 'Plastic' },
+            ballAndAxe = true
+        },
+        ['ii_Spectre'] = {
+            hat = 'no hat',
+            ballColor = Color3.fromRGB(128, 187, 219),
+            ballMaterial = 'Granite',
+            axeTipColor = Color3.fromRGB(151, 156, 194),
+            axeHandleColor = Color3.fromRGB(159, 137, 103),
+            ballAndAxe = true
+        },
+        ['ii_Spectre (v0.2 Archive)'] = {
+            hat = 'tilted crown',
+            ballColor = Color3.fromRGB(91, 80, 130),
+            ballMaterial = 'Plastic',
+            axeTipColor = Color3.fromRGB(151, 156, 194),
+            axeHandleColor = Color3.fromRGB(159, 137, 103),
+        },
+        ['ManlyTorch'] = {
+            hat = 'tilted crown',
+            ballColor = Color3.fromRGB(221, 181, 70),
+            ballMaterial = 'Metal',
+            axeTipColor = Color3.fromRGB(163, 162, 165),
+            axeHandleColor = Color3.fromRGB(159, 137, 103),
+        },
+    }
+
+    local hammerTrailObj = nil
+    local hammerA0 = nil
+    local hammerA1 = nil
+    local ballTrailObj = nil
+    local ballA0 = nil
+    local ballA1 = nil
+    local faceBillboard = nil
+    local faceImage = nil
+    local avatarBladePart = nil
+    local lastApplied = nil
+
+    local axeClone = nil
+    local ballClone = nil
+    local partData = {}
+    local cloneParts = {}
+
+    local getAllParts = function(root)
+        local t = {}
+        if root:IsA('BasePart') then t[#t+1] = root end
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA('BasePart') then t[#t+1] = d end
+        end
+        return t
+    end
+
+    local setHatTransparency = function(val)
+        if not lplr.model then return end
+        local visualFolder = lplr.model:FindFirstChild('visualFolder')
+        if not visualFolder then return end
+        local hat = visualFolder:FindFirstChild('Hat')
+        if not hat then return end
+        for _, part in ipairs(getAllParts(hat)) do
+            pcall(function() part.Transparency = val end)
+        end
+    end
+
+    local buildClones = function()
+        if not lplr.model or not lplr.axe or not lplr.ball then return end
+        local axeSource = lplr.axe
+        local handleSource = axeSource:FindFirstChild('handle')
+        if not handleSource then return end
+        partData = {}
+        cloneParts = {}
+        for _, part in ipairs(getAllParts(axeSource)) do
+            partData[#partData+1] = {
+                name = part.Name,
+                relPos = handleSource.CFrame:PointToObjectSpace(part.Position),
+                relRot = handleSource.CFrame:ToObjectSpace(part.CFrame) - handleSource.CFrame:ToObjectSpace(part.CFrame).Position,
+            }
+        end
+        if axeClone then axeClone:Destroy() end
+        axeClone = axeSource:Clone()
+        axeClone.Parent = workspace
+        for _, part in ipairs(getAllParts(axeClone)) do
+            part.Anchored = true
+            part.CanCollide = false
+            part.CastShadow = false
+            if part.Name == 'handle' then
+                part.Color = Color3.fromRGB(159, 137, 103)
+            else
+                part.Color = Color3.fromRGB(163, 162, 165)
+            end
+        end
+        for _, d in ipairs(axeClone:GetDescendants()) do
+            if d:IsA('Trail') or d:IsA('ParticleEmitter') or d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then
+                d:Destroy()
+            end
+        end
+        local hitHitbox = axeClone:FindFirstChild('hitHitbox', true)
+        if hitHitbox then hitHitbox:Destroy() end
+        for _, part in ipairs(getAllParts(axeClone)) do
+            cloneParts[part.Name] = part
+        end
+        if ballClone then ballClone:Destroy() end
+        ballClone = lplr.ball:Clone()
+        for _, child in ipairs(ballClone:GetChildren()) do child:Destroy() end
+        for _, d in ipairs(ballClone:GetDescendants()) do
+            if d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then d:Destroy() end
+        end
+        ballClone.Anchored = true
+        ballClone.CanCollide = false
+        ballClone.CastShadow = false
+        ballClone.Material = Enum.Material.Plastic
+        ballClone.Color = Color3.fromRGB(255, 124, 119)
+        ballClone.Parent = workspace
+    end
+
+    local destroyClones = function()
+        if axeClone then axeClone:Destroy() axeClone = nil end
+        if ballClone then ballClone:Destroy() ballClone = nil end
+        partData = {}
+        cloneParts = {}
+        setHatTransparency(0)
+    end
+
+    local resolveColor = function(c)
+        if c == 'rainbow' then return returnRainbow() end
+        return c
+    end
+
+    local removeHammerTrail = function()
+        if hammerTrailObj then hammerTrailObj:Destroy() hammerTrailObj = nil end
+        if hammerA0 then hammerA0:Destroy() hammerA0 = nil end
+        if hammerA1 then hammerA1:Destroy() hammerA1 = nil end
+    end
+
+    local removeBallTrail = function()
+        if ballTrailObj then ballTrailObj:Destroy() ballTrailObj = nil end
+        if ballA0 then ballA0:Destroy() ballA0 = nil end
+        if ballA1 then ballA1:Destroy() ballA1 = nil end
+    end
+
+    local removeFace = function()
+        if faceBillboard then faceBillboard:Destroy() faceBillboard = nil end
+        faceImage = nil
+    end
+
+    local removeBlade = function()
+        if avatarBladePart then avatarBladePart:Destroy() avatarBladePart = nil end
+    end
+
+    local makeFace = function()
+        removeFace()
+        faceBillboard = Instance.new('BillboardGui')
+        faceBillboard.Name = 'avatarFace'
+        faceBillboard.Size = UDim2.new(2.4, 0, 1.9, 0)
+        faceBillboard.StudsOffset = Vector3.new(0, -0.1, 0.61)
+        faceBillboard.AlwaysOnTop = true
+        faceBillboard.ResetOnSpawn = false
+        faceImage = Instance.new('ImageLabel')
+        faceImage.Size = UDim2.new(1, 0, 1, 0)
+        faceImage.BackgroundTransparency = 1
+        faceImage.Parent = faceBillboard
+    end
+
+    local makeBlade = function()
+        removeBlade()
+        avatarBladePart = Instance.new('Part')
+        avatarBladePart.Anchored = true
+        avatarBladePart.CanCollide = false
+        avatarBladePart.CastShadow = false
+        avatarBladePart.Size = Vector3.new(0.1, 0.57, 0.1)
+        avatarBladePart.Parent = workspace
+    end
+
+    local makeTrail = function(parent, cfg)
+        if not parent then return nil, nil, nil end
+        local thickness = cfg.thickness or 0.5
+        local a0 = Instance.new('Attachment')
+        a0.Position = Vector3.new(0, thickness / 2, 0)
+        a0.Parent = parent
+        local a1 = Instance.new('Attachment')
+        a1.Position = Vector3.new(0, -thickness / 2, 0)
+        a1.Parent = parent
+        local tr = Instance.new('Trail')
+        tr.Attachment0 = a0
+        tr.Attachment1 = a1
+        tr.Lifetime = cfg.lifetime or 0.5
+        tr.MinLength = 0
+        tr.FaceCamera = true
+        tr.LightEmission = 1
+        tr.Color = ColorSequence.new(resolveColor(cfg.color) or Color3.new(1, 1, 1))
+        tr.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1)})
+        tr.Parent = parent
+        return a0, a1, tr
+    end
+
+    local equipHat = function(hatName)
+        pcall(function() events.equipItem:FireServer(hatName) end)
+        if hatName ~= 'no hat' then
+            notif('Disguise', 'This disguise uses "' .. hatName .. '". Make sure you own it!', 5)
+        end
+    end
+
+    local cleanupAll = function()
+        removeHammerTrail()
+        removeBallTrail()
+        removeFace()
+        removeBlade()
+        destroyClones()
+    end
+
+    local avatarNames = { 'None' }
+    for name in pairs(Avatars) do
+        table.insert(avatarNames, name)
+    end
+    table.sort(avatarNames)
+
+    local AvatarToggle = render:CreateToggle({
+        Name = 'Disguise',
+        CurrentValue = false,
+        Flag = 'avatar_toggle',
+        Callback = function(val)
+            if not val then
+                cleanupAll()
+                lastApplied = nil
+            end
+        end,
+    })
+
+    local AvatarDropdown = render:CreateDropdown({
+        Name = 'Select Disguise',
+        Options = avatarNames,
+        CurrentOption = { 'None' },
+        Flag = 'avatar_select',
+        Callback = function()
+            cleanupAll()
+            lastApplied = nil
+        end,
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not AvatarToggle.CurrentValue then return end
+        local selected = AvatarDropdown.CurrentOption[1]
+        if not selected or selected == 'None' then
+            if lastApplied then
+                cleanupAll()
+                lastApplied = nil
+            end
+            return
+        end
+        local av = Avatars[selected]
+        if not av then return end
+        if lastApplied ~= selected then
+            cleanupAll()
+            if av.hat then equipHat(av.hat) end
+            if av.ballAndAxe then buildClones() end
+            lastApplied = selected
+        end
+        if av.ballAndAxe then
+            if not axeClone or not axeClone.Parent or not ballClone or not ballClone.Parent then buildClones() end
+            if lplr.ball then
+                local ballTransparency = lplr.ball.Transparency
+                setHatTransparency(1)
+                local base = lplr.ball.Size
+                ballClone.Size = Vector3.new(base.X - 1.6338, base.Y - 1.35, base.Z - 1.6338)
+                ballClone.CFrame = CFrame.new(lplr.ball.Position + Vector3.new(0.2, 1.6, 0)) * CFrame.Angles(0, 0, math.rad(-11.1549))
+                ballClone.Transparency = ballTransparency
+                local rootCFrame = CFrame.new(lplr.ball.Position + Vector3.new(-0.6, 2.3, 0)) * CFrame.Angles(math.rad(0), math.rad(-180), math.rad(-51.7183))
+                for _, data in ipairs(partData) do
+                    local clonePart = cloneParts[data.name]
+                    if clonePart then
+                        clonePart.Transparency = ballTransparency
+                        if data.name == 'handle' then
+                            clonePart.Size = Vector3.new(0.10999999940395355, 1.899999976158142, 0.18999959528446198)
+                        else
+                            clonePart.Size = Vector3.new(0.6000000238418579, 0.30000001192092896, 0.18999962508678436)
+                        end
+                        local extraOffset = data.name == 'handle' and Vector3.new(0, 0.77, 0) or Vector3.zero
+                        clonePart.CFrame = rootCFrame * CFrame.new(data.relPos + extraOffset) * CFrame.fromMatrix(Vector3.zero, data.relRot.XVector, data.relRot.YVector, data.relRot.ZVector)
+                    end
+                end
+            end
+        end
+        if lplr.ball then
+            if av.ballColor then lplr.ball.Color = resolveColor(av.ballColor) end
+            if av.ballMaterial then pcall(function() lplr.ball.Material = Enum.Material[av.ballMaterial] end) end
+        end
+        if lplr.axe then
+            if av.axeTipColor then lplr.axe.Color = resolveColor(av.axeTipColor) end
+            if av.axeTipMaterial then pcall(function() lplr.axe.Material = Enum.Material[av.axeTipMaterial] end) end
+            local handle = lplr.axe:FindFirstChild('handle')
+            if handle then
+                if av.axeHandleColor then handle.Color = resolveColor(av.axeHandleColor) end
+                if av.axeHandleMaterial then pcall(function() handle.Material = Enum.Material[av.axeHandleMaterial] end) end
+            end
+        end
+        if av.faceTexture then
+            if not faceBillboard or not faceBillboard.Parent then makeFace() end
+            if lplr.ball and faceBillboard then
+                faceImage.Image = av.faceTexture
+                faceImage.ImageTransparency = lplr.ball.Transparency
+                faceBillboard.Parent = lplr.ball
+            end
+        else
+            removeFace()
+        end
+        if av.blade then
+            if not avatarBladePart or not avatarBladePart.Parent then makeBlade() end
+            if lplr.axe and avatarBladePart then
+                avatarBladePart.CFrame = lplr.axe.CFrame * CFrame.new(0.59, -0.08, 0)
+                avatarBladePart.Color = resolveColor(av.blade.color) or Color3.new(1, 1, 1)
+                pcall(function() avatarBladePart.Material = Enum.Material[av.blade.material or 'Neon'] end)
+            end
+        else
+            removeBlade()
+        end
+        if av.hammerTrail then
+            if not hammerTrailObj or not hammerTrailObj.Parent then
+                hammerA0, hammerA1, hammerTrailObj = makeTrail(lplr.axe, av.hammerTrail)
+            elseif hammerTrailObj then
+                hammerTrailObj.Color = ColorSequence.new(resolveColor(av.hammerTrail.color) or Color3.new(1, 1, 1))
+            end
+        else
+            removeHammerTrail()
+        end
+        if av.ballTrail then
+            if not ballTrailObj or not ballTrailObj.Parent then
+                ballA0, ballA1, ballTrailObj = makeTrail(lplr.ball, av.ballTrail)
+            elseif ballTrailObj then
+                ballTrailObj.Color = ColorSequence.new(resolveColor(av.ballTrail.color) or Color3.new(1, 1, 1))
+            end
+        else
+            removeBallTrail()
+        end
+    end))
+
+    cleanup.add({ Destroy = function() cleanupAll() end })
+end)
+
 Rayfield:LoadConfiguration()
