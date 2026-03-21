@@ -3650,7 +3650,6 @@ end)
 
 runFunction(function()
     tools:CreateDivider()
-
     local recording = {}
     local isRecording = false
     local isPlaying = false
@@ -3660,58 +3659,88 @@ runFunction(function()
     local sloMoAccum = 0
     local ballWasAnchored = false
     local activeTween = nil
-
     local function saveAnchorState()
         ballWasAnchored = lplr.ball and lplr.ball.Anchored or false
     end
-
     local function anchorBall()
         if lplr.ball then lplr.ball.Anchored = true end
     end
-
     local function unanchorBall()
         if lplr.ball then lplr.ball.Anchored = ballWasAnchored end
     end
-
+    local function unanchorAxe()
+        if lplr.axe then
+            lplr.axe.Anchored = false
+            local handle = lplr.axe:FindFirstChild('handle')
+            if handle then handle.Anchored = false end
+        end
+    end
     local function captureFrame()
         if not lplr.ball then return end
+        local axeCF = lplr.axe and lplr.axe.CFrame or nil
+        local handleCF = (lplr.axe and lplr.axe:FindFirstChild('handle')) and lplr.axe.handle.CFrame or nil
         table.insert(recording, {
             b = lplr.ball.CFrame,
             bv = lplr.ball.AssemblyLinearVelocity,
             bav = lplr.ball.AssemblyAngularVelocity,
+            a = axeCF,
+            ah = handleCF,
         })
     end
-
     local function snapFrame(f)
         if not f or not lplr.ball then return end
         lplr.ball.CFrame = f.b
         lplr.ball.AssemblyLinearVelocity = f.bv
         lplr.ball.AssemblyAngularVelocity = f.bav
+        if f.a and lplr.axe then
+            lplr.axe.Anchored = true
+            lplr.axe.CFrame = f.a
+        end
+        if f.ah and lplr.axe then
+            local handle = lplr.axe:FindFirstChild('handle')
+            if handle then
+                handle.Anchored = true
+                handle.CFrame = f.ah
+            end
+        end
     end
-
     local function tweenToFrame(f, duration)
         if not f or not lplr.ball then return end
         if activeTween then activeTween:Cancel() activeTween = nil end
         activeTween = tweenService:Create(lplr.ball, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = f.b })
         activeTween:Play()
+        if f.a and lplr.axe then
+            lplr.axe.Anchored = true
+            tweenService:Create(lplr.axe, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = f.a }):Play()
+        end
+        if f.ah and lplr.axe then
+            local handle = lplr.axe:FindFirstChild('handle')
+            if handle then
+                handle.Anchored = true
+                tweenService:Create(handle, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = f.ah }):Play()
+            end
+        end
     end
-
     local function stopPlayback()
         isPlaying = false
         if activeTween then activeTween:Cancel() activeTween = nil end
         unanchorBall()
+        unanchorAxe()
     end
-
     local SlowMoToggle = tools:CreateToggle({
         Name = 'Slow Motion',
         CurrentValue = false,
         Flag = 'tas_slowmo',
         Callback = function(val)
             isSloMo = val
-            if val then saveAnchorState() sloMoAccum = 0 else unanchorBall() end
+            if val then
+                saveAnchorState()
+                sloMoAccum = 0
+            else
+                unanchorBall()
+            end
         end
     })
-
     local SlowMoSlider = tools:CreateSlider({
         Name = 'Time Scale',
         Range = {0.05, 0.95},
@@ -3721,18 +3750,19 @@ runFunction(function()
         Flag = 'tas_timescale',
         Callback = function() end
     })
-
     local RecordToggle = tools:CreateToggle({
         Name = 'TAS Record',
         CurrentValue = false,
         Flag = 'tas_record',
         Callback = function(val)
-            if val then recording = {} stopPlayback() end
+            if val then
+                recording = {}
+                stopPlayback()
+            end
             isRecording = val
             notif('TAS', val and 'Recording...' or ('Stopped. ' .. #recording .. ' frames recorded.'), 3)
         end
     })
-
     local TasSaveNameInput = tools:CreateInput({
         Name = 'TAS Name',
         PlaceholderText = 'e.g. run1',
@@ -3740,7 +3770,6 @@ runFunction(function()
         Flag = 'tas_save_name',
         Callback = function() end
     })
-
     tools:CreateButton({
         Name = 'Save TAS',
         Callback = function()
@@ -3750,19 +3779,29 @@ runFunction(function()
             if not isfolder('boba/tas') then makefolder('boba/tas') end
             local data = {}
             for _, f in ipairs(recording) do
-                table.insert(data, {
+                local entry = {
                     bx = f.b.X, by = f.b.Y, bz = f.b.Z,
                     brx = f.b.XVector.X, bry = f.b.XVector.Y, brz = f.b.XVector.Z,
                     bux = f.b.YVector.X, buy = f.b.YVector.Y, buz = f.b.YVector.Z,
                     vx = f.bv.X, vy = f.bv.Y, vz = f.bv.Z,
                     avx = f.bav.X, avy = f.bav.Y, avz = f.bav.Z,
-                })
+                }
+                if f.a then
+                    entry.ax = f.a.X entry.ay = f.a.Y entry.az = f.a.Z
+                    entry.arx = f.a.XVector.X entry.ary = f.a.XVector.Y entry.arz = f.a.XVector.Z
+                    entry.aux = f.a.YVector.X entry.auy = f.a.YVector.Y entry.auz = f.a.YVector.Z
+                end
+                if f.ah then
+                    entry.ahx = f.ah.X entry.ahy = f.ah.Y entry.ahz = f.ah.Z
+                    entry.ahrx = f.ah.XVector.X entry.ahry = f.ah.XVector.Y entry.ahrz = f.ah.XVector.Z
+                    entry.ahux = f.ah.YVector.X entry.ahuy = f.ah.YVector.Y entry.ahuz = f.ah.YVector.Z
+                end
+                table.insert(data, entry)
             end
             pcall(function() writefile('boba/tas/' .. name .. '.json', httpService:JSONEncode(data)) end)
             notif('TAS', 'Saved "' .. name .. '" (' .. #recording .. ' frames).', 4)
         end
     })
-
     tools:CreateButton({
         Name = 'Load TAS',
         Callback = function()
@@ -3776,27 +3815,56 @@ runFunction(function()
             if not suc2 then notif('TAS', 'Failed to parse file.', 3) return end
             recording = {}
             for _, f in ipairs(data) do
-                local cf = CFrame.new(f.bx, f.by, f.bz)
+                local cf = CFrame.new()
                 pcall(function()
-                    cf = CFrame.fromMatrix(Vector3.new(f.bx, f.by, f.bz), Vector3.new(f.brx, f.bry, f.brz), Vector3.new(f.bux, f.buy, f.buz))
+                    cf = CFrame.fromMatrix(
+                        Vector3.new(f.bx, f.by, f.bz),
+                        Vector3.new(f.brx, f.bry, f.brz),
+                        Vector3.new(f.bux, f.buy, f.buz)
+                    )
                 end)
+                local axeCF = nil
+                if f.ax then
+                    pcall(function()
+                        axeCF = CFrame.fromMatrix(
+                            Vector3.new(f.ax, f.ay, f.az),
+                            Vector3.new(f.arx, f.ary, f.arz),
+                            Vector3.new(f.aux, f.auy, f.auz)
+                        )
+                    end)
+                end
+                local handleCF = nil
+                if f.ahx then
+                    pcall(function()
+                        handleCF = CFrame.fromMatrix(
+                            Vector3.new(f.ahx, f.ahy, f.ahz),
+                            Vector3.new(f.ahrx, f.ahry, f.ahrz),
+                            Vector3.new(f.ahux, f.ahuy, f.ahuz)
+                        )
+                    end)
+                end
                 table.insert(recording, {
-                    b = cf,
-                    bv = Vector3.new(f.vx, f.vy, f.vz),
+                    b   = cf,
+                    bv  = Vector3.new(f.vx, f.vy, f.vz),
                     bav = Vector3.new(f.avx, f.avy, f.avz),
+                    a   = axeCF,
+                    ah  = handleCF,
                 })
             end
             notif('TAS', 'Loaded "' .. name .. '" (' .. #recording .. ' frames).', 4)
         end
     })
-
     local PlayToggle = tools:CreateToggle({
         Name = 'TAS Playback',
         CurrentValue = false,
         Flag = 'tas_play',
         Callback = function(val)
             if val then
-                if #recording == 0 then notif('TAS', 'Nothing recorded.', 3) PlayToggle.CurrentValue = false return end
+                if #recording == 0 then
+                    notif('TAS', 'Nothing recorded.', 3)
+                    PlayToggle.CurrentValue = false
+                    return
+                end
                 isRecording = false
                 RecordToggle.CurrentValue = false
                 saveAnchorState()
@@ -3810,7 +3878,6 @@ runFunction(function()
             end
         end
     })
-
     local PlaybackSpeedSlider = tools:CreateSlider({
         Name = 'Playback Speed',
         Range = {0.05, 4},
@@ -3820,21 +3887,18 @@ runFunction(function()
         Flag = 'tas_playback_speed',
         Callback = function() end
     })
-
     local TweenToggle = tools:CreateToggle({
-        Name = 'Smooth Playback',
-        CurrentValue = true,
+        Name = 'Smooth Playback (NOT RECOMMENDED)',
+        CurrentValue = false,
         Flag = 'tas_tween',
         Callback = function() end
     })
-
     local LoopToggle = tools:CreateToggle({
         Name = 'Loop Playback',
         CurrentValue = false,
         Flag = 'tas_loop',
         Callback = function() end
     })
-
     tools:CreateButton({
         Name = 'Clear Recording',
         Callback = function()
@@ -3845,7 +3909,6 @@ runFunction(function()
             notif('TAS', 'Cleared.', 3)
         end
     })
-
     cleanup.add(runService.PreSimulation:Connect(function()
         if isSloMo and not isPlaying then
             sloMoAccum = sloMoAccum + SlowMoSlider.CurrentValue
@@ -3857,11 +3920,14 @@ runFunction(function()
             end
         end
     end))
-
     cleanup.add(runService.PostSimulation:Connect(function()
-        if isRecording and not isSloMo then captureFrame() end
+        if isRecording and not isSloMo then
+            captureFrame()
+        end
         if isSloMo and isRecording and not isPlaying then
-            if sloMoAccum < SlowMoSlider.CurrentValue then captureFrame() end
+            if sloMoAccum < SlowMoSlider.CurrentValue then
+                captureFrame()
+            end
         end
         if isPlaying then
             playbackAccum = playbackAccum + PlaybackSpeedSlider.CurrentValue
@@ -3883,16 +3949,17 @@ runFunction(function()
             end
             local f = recording[math.clamp(playIndex, 1, #recording)]
             if TweenToggle.CurrentValue and advanced then
-                tweenToFrame(f, math.clamp((1 / 60) / PlaybackSpeedSlider.CurrentValue, 0.01, 0.1))
+                local dur = math.clamp((1 / 60) / PlaybackSpeedSlider.CurrentValue, 0.01, 0.1)
+                tweenToFrame(f, dur)
             elseif not TweenToggle.CurrentValue then
                 snapFrame(f)
             end
         end
     end))
-
     cleanup.add({ Destroy = function()
         stopPlayback()
         unanchorBall()
+        unanchorAxe()
         isPlaying = false
         isRecording = false
         isSloMo = false
