@@ -2174,4 +2174,146 @@ runFunction(function()
     end))
 end)
 
+runFunction(function()
+    render:CreateDivider()
+
+    local axeClone = nil
+    local ballClone = nil
+    local partData = {}
+    local cloneParts = {}
+
+    local getAllParts = function(root)
+        local t = {}
+        if root:IsA('BasePart') then t[#t+1] = root end
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA('BasePart') then t[#t+1] = d end
+        end
+        return t
+    end
+
+    local setHatTransparency = function(val)
+        local hat = lplr.visuals and lplr.visuals:FindFirstChild('Hat')
+        if not hat then return end
+        for _, part in ipairs(getAllParts(hat)) do
+            pcall(function() part.Transparency = val end)
+        end
+    end
+
+    local buildClones = function()
+        if not lplr.model or not lplr.axe or not lplr.ball then return end
+        local axeSource = lplr.axe
+        local handleSource = axeSource:FindFirstChild('handle')
+        if not handleSource then return end
+
+        partData = {}
+        cloneParts = {}
+
+        for _, part in ipairs(getAllParts(axeSource)) do
+            partData[#partData+1] = {
+                name   = part.Name,
+                relPos = handleSource.CFrame:PointToObjectSpace(part.Position),
+                relRot = handleSource.CFrame:ToObjectSpace(part.CFrame) - handleSource.CFrame:ToObjectSpace(part.CFrame).Position,
+            }
+        end
+
+        if axeClone then axeClone:Destroy() end
+        axeClone = axeSource:Clone()
+        axeClone.Parent = workspace
+        for _, part in ipairs(getAllParts(axeClone)) do
+            part.Anchored = true
+            part.CanCollide = false
+            part.CastShadow = false
+            if part.Name == 'handle' then
+                part.Color = Color3.fromRGB(159, 137, 103)
+            else
+                part.Color = Color3.fromRGB(163, 162, 165)
+            end
+        end
+        for _, d in ipairs(axeClone:GetDescendants()) do
+            if d:IsA('Trail') or d:IsA('ParticleEmitter') or d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then
+                d:Destroy()
+            end
+        end
+        local hitHitbox = axeClone:FindFirstChild('hitHitbox', true)
+        if hitHitbox then hitHitbox:Destroy() end
+        for _, part in ipairs(getAllParts(axeClone)) do
+            cloneParts[part.Name] = part
+        end
+
+        if ballClone then ballClone:Destroy() end
+        ballClone = lplr.ball:Clone()
+        for _, child in ipairs(ballClone:GetChildren()) do child:Destroy() end
+        for _, d in ipairs(ballClone:GetDescendants()) do
+            if d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then
+                d:Destroy()
+            end
+        end
+        ballClone.Anchored = true
+        ballClone.CanCollide = false
+        ballClone.CastShadow = false
+        ballClone.Material = Enum.Material.Plastic
+        ballClone.Color = Color3.fromRGB(255, 124, 119)
+        ballClone.Parent = workspace
+    end
+
+    local destroyClones = function()
+        if axeClone then axeClone:Destroy() axeClone = nil end
+        if ballClone then ballClone:Destroy() ballClone = nil end
+        partData = {}
+        cloneParts = {}
+        setHatTransparency(0)
+    end
+
+    local BallAndAxe = render:CreateToggle({
+        Name = "Ball and Axe",
+        CurrentValue = false,
+        Flag = "ball_and_axe",
+        Callback = function(val)
+            if val then buildClones() else destroyClones() end
+        end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not BallAndAxe.CurrentValue then return end
+
+        if not axeClone or not axeClone.Parent or not ballClone or not ballClone.Parent then
+            buildClones()
+            return
+        end
+
+        if not lplr.ball then return end
+
+        local ballTransparency = lplr.ball.Transparency
+
+        setHatTransparency(1)
+
+        local base = lplr.ball.Size
+        ballClone.Size = Vector3.new(base.X - 1.6338, base.Y - 1.35, base.Z - 1.6338)
+        ballClone.CFrame = CFrame.new(lplr.ball.Position + Vector3.new(0.2, 1.6, 0))
+            * CFrame.Angles(0, 0, math.rad(-11.1549))
+        ballClone.Transparency = ballTransparency
+
+        local rootCFrame = CFrame.new(lplr.ball.Position + Vector3.new(-0.6, 2.3, 0))
+            * CFrame.Angles(math.rad(0), math.rad(-180), math.rad(-51.7183))
+
+        for _, data in ipairs(partData) do
+            local clonePart = cloneParts[data.name]
+            if clonePart then
+                clonePart.Transparency = ballTransparency
+                if data.name == 'handle' then
+                    clonePart.Size = Vector3.new(0.10999999940395355, 1.899999976158142, 0.18999959528446198)
+                else
+                    clonePart.Size = Vector3.new(0.6000000238418579, 0.30000001192092896, 0.18999962508678436)
+                end
+                local extraOffset = data.name == 'handle' and Vector3.new(0, 0.77, 0) or Vector3.zero
+                clonePart.CFrame = rootCFrame
+                    * CFrame.new(data.relPos + extraOffset)
+                    * CFrame.fromMatrix(Vector3.zero, data.relRot.XVector, data.relRot.YVector, data.relRot.ZVector)
+            end
+        end
+    end))
+
+    cleanup.add({ Destroy = function() destroyClones() end })
+end)
+
 Rayfield:LoadConfiguration()
