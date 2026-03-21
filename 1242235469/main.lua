@@ -3009,121 +3009,6 @@ end)
 runFunction(function()
     render:CreateDivider()
 
-    local premadeFaces = {
-        {name = 'Custom', id = ''},
-        {name = 'Default Face', id = 'rbxassetid://111858682543206'},
-        {name = 'White Default Face', id = 'rbxassetid://10184799258'},
-        {name = 'Sideways Default Face', id = 'rbxassetid://16000563171'},
-        {name = ':D', id = 'rbxassetid://17244838360'},
-        {name = '^_^', id = 'rbxassetid://99957094999801'},
-        {name = 'Happy Blush', id = 'rbxassetid://6287342834'},
-        {name = 'Cute Chill Face', id = 'rbxassetid://7235470435'},
-        {name = 'Wow!', id = 'rbxassetid://6113785880'},
-        {name = 'Straight face', id = 'rbxassetid://96522502090962'},
-        {name = 'normal face', id = 'rbxassetid://9208983473'},
-        {name = 'even more normal face', id = 'rbxassetid://6602241122'},
-        {name = 'Serious Face!!', id = 'rbxassetid://5303681402'},
-        {name = 'Man Face', id = 'rbxassetid://5799739939'},
-        {name = 'Sad Face.', id = 'rbxassetid://102000079834063'},
-        {name = 'AHHHH', id = 'rbxassetid://85037001118055'},
-        {name = 'What..?', id = 'rbxassetid://7485602656'},
-        {name = 'EVIL', id = 'rbxassetid://6508288104'},
-        {name = 'Suspicous', id = 'rbxassetid://18636752982'},
-        {name = 'More Suspicous', id = 'rbxassetid://5937011121'},
-        {name = 'Purple Man', id = 'rbxassetid://5113872729'},
-        {name = 'Epic Face', id = 'rbxassetid://14301710584'},
-        {name = 'Troll Face', id = 'rbxassetid://5294554965'},
-        {name = 'Baller', id = 'rbxassetid://110402942731812'},
-        {name = 'obama', id = 'rbxassetid://4968764407'},
-        {name = 'YOUR FACE HERE', id = 'rbxassetid://91130451314773'},
-        {name = 'gift card', id = 'rbxassetid://18364602345'},
-        {name = 'Cat Face', id = 'rbxassetid://15477500214'},
-        {name = 'Cat Face 1', id = 'rbxassetid://6821165844'},
-        {name = 'White Cat Face', id = 'rbxassetid://17186419549'},
-        {name = 'Zombie', id = 'rbxassetid://7157327144'},
-        {name = 'Vampire Face', id = 'rbxassetid://6304604718'},
-        {name = 'Dead.', id = 'rbxassetid://130187161010472'},
-        {name = 'Dream', id = 'rbxassetid://11151151227'},
-        {name = 'zzz...', id = 'rbxassetid://11698917622'},
-        {name = 'sans', id = 'rbxassetid://6671698461'},
-        {name = 'Drakobloxxer', id = 'rbxassetid://97491265149516'},
-        {name = 'bobo', id = 'rbxassetid://10794036784'},
-        {name = 'teardrop bobo', id = 'rbxassetid://85614090385889'},
-        {name = 'god bobo', id = 'rbxassetid://98321179209767'},
-        {name = 'kind of sus bobo', id = 'rbxassetid://13503246365'},
-        {name = 'Tear Bobo™️', id = 'rbxassetid://119604162050079'},
-        {name = 'Python', id = 'rbxassetid://18689314031'},
-        {name = 'Java', id = 'rbxassetid://18689390644'},
-        {name = 'Haskell', id = 'rbxassetid://18689351942'},
-        {name = 'JavaScript', id = 'rbxassetid://18689397624'},
-    }
-
-    local premadeOptions = {}
-    local premadeLookup = {}
-    for _, entry in ipairs(premadeFaces) do
-        table.insert(premadeOptions, entry.name)
-        premadeLookup[entry.name] = entry.id
-    end
-
-    local Face = render:CreateToggle({
-        Name = 'Face',
-        CurrentValue = false,
-        Flag = 'face',
-        Callback = function() end
-    })
-    local FacePremade = render:CreateDropdown({
-        Name = 'Premade Face',
-        Options = premadeOptions,
-        CurrentOption = {'Custom'},
-        Flag = 'face_premade',
-        Callback = function() end
-    })
-    local FaceTexture = render:CreateInput({
-        Name = 'Face Texture',
-        Flag = 'face_texture',
-        PlaceholderText = 'rbxassetid://111858682543206',
-        CurrentValue = 'rbxassetid://111858682543206',
-        Callback = function() end
-    })
-
-    local billboard = Instance.new('BillboardGui')
-    billboard.Name = 'face'
-    billboard.Size = UDim2.new(2.4000001, 0, 1.90000045, 0)
-    billboard.StudsOffset = Vector3.new(0, -0.10000000149011612, 0.6100000143051147)
-    billboard.AlwaysOnTop = true
-    billboard.ResetOnSpawn = false
-
-    local image = Instance.new('ImageLabel')
-    image.Size = UDim2.new(1, 0, 1, 0)
-    image.BackgroundTransparency = 1
-    image.Parent = billboard
-
-    cleanup.add(runService.RenderStepped:Connect(function()
-        pcall(function()
-            if not lplr.ball then
-                billboard.Parent = nil
-                return
-            end
-            if Face.CurrentValue then
-                local selected = FacePremade.CurrentOption[1]
-                local tex = (selected ~= 'Custom' and premadeLookup[selected] ~= '')
-                    and premadeLookup[selected]
-                    or FaceTexture.CurrentValue
-                image.Image = tex
-                image.ImageTransparency = lplr.ball.Transparency
-                if billboard.Parent ~= lplr.ball then
-                    billboard.Parent = lplr.ball
-                end
-            else
-                billboard.Parent = nil
-            end
-        end)
-    end))
-end)
-
-runFunction(function()
-    render:CreateDivider()
-
     local snowballs = {}
     local active = false
 
@@ -3258,6 +3143,148 @@ runFunction(function()
             end)
         end
     end))
+end)
+
+runFunction(function()
+    render:CreateDivider()
+
+    local axeClone = nil
+    local ballClone = nil
+    local partData = {}
+    local cloneParts = {}
+
+    local getAllParts = function(root)
+        local t = {}
+        if root:IsA('BasePart') then t[#t+1] = root end
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA('BasePart') then t[#t+1] = d end
+        end
+        return t
+    end
+
+    local setHatTransparency = function(val)
+        local hat = lplr.visuals and lplr.visuals:FindFirstChild('Hat')
+        if not hat then return end
+        for _, part in ipairs(getAllParts(hat)) do
+            pcall(function() part.Transparency = val end)
+        end
+    end
+
+    local buildClones = function()
+        if not lplr.model or not lplr.axe or not lplr.ball then return end
+        local axeSource = lplr.axe
+        local handleSource = axeSource:FindFirstChild('handle')
+        if not handleSource then return end
+
+        partData = {}
+        cloneParts = {}
+
+        for _, part in ipairs(getAllParts(axeSource)) do
+            partData[#partData+1] = {
+                name   = part.Name,
+                relPos = handleSource.CFrame:PointToObjectSpace(part.Position),
+                relRot = handleSource.CFrame:ToObjectSpace(part.CFrame) - handleSource.CFrame:ToObjectSpace(part.CFrame).Position,
+            }
+        end
+
+        if axeClone then axeClone:Destroy() end
+        axeClone = axeSource:Clone()
+        axeClone.Parent = workspace
+        for _, part in ipairs(getAllParts(axeClone)) do
+            part.Anchored = true
+            part.CanCollide = false
+            part.CastShadow = false
+            if part.Name == 'handle' then
+                part.Color = Color3.fromRGB(159, 137, 103)
+            else
+                part.Color = Color3.fromRGB(163, 162, 165)
+            end
+        end
+        for _, d in ipairs(axeClone:GetDescendants()) do
+            if d:IsA('Trail') or d:IsA('ParticleEmitter') or d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then
+                d:Destroy()
+            end
+        end
+        local hitHitbox = axeClone:FindFirstChild('hitHitbox', true)
+        if hitHitbox then hitHitbox:Destroy() end
+        for _, part in ipairs(getAllParts(axeClone)) do
+            cloneParts[part.Name] = part
+        end
+
+        if ballClone then ballClone:Destroy() end
+        ballClone = lplr.ball:Clone()
+        for _, child in ipairs(ballClone:GetChildren()) do child:Destroy() end
+        for _, d in ipairs(ballClone:GetDescendants()) do
+            if d:IsA('Decal') or d:IsA('Texture') or d:IsA('SpecialMesh') then
+                d:Destroy()
+            end
+        end
+        ballClone.Anchored = true
+        ballClone.CanCollide = false
+        ballClone.CastShadow = false
+        ballClone.Material = Enum.Material.Plastic
+        ballClone.Color = Color3.fromRGB(255, 124, 119)
+        ballClone.Parent = workspace
+    end
+
+    local destroyClones = function()
+        if axeClone then axeClone:Destroy() axeClone = nil end
+        if ballClone then ballClone:Destroy() ballClone = nil end
+        partData = {}
+        cloneParts = {}
+        setHatTransparency(0)
+    end
+
+    local BallAndAxe = render:CreateToggle({
+        Name = "Ball and Axe",
+        CurrentValue = false,
+        Flag = "ball_and_axe",
+        Callback = function(val)
+            if val then buildClones() else destroyClones() end
+        end
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not BallAndAxe.CurrentValue then return end
+
+        if not axeClone or not axeClone.Parent or not ballClone or not ballClone.Parent then
+            buildClones()
+            return
+        end
+
+        if not lplr.ball then return end
+
+        local ballTransparency = lplr.ball.Transparency
+
+        setHatTransparency(1)
+
+        local base = lplr.ball.Size
+        ballClone.Size = Vector3.new(base.X - 1.6338, base.Y - 1.35, base.Z - 1.6338)
+        ballClone.CFrame = CFrame.new(lplr.ball.Position + Vector3.new(0.2, 1.6, 0))
+            * CFrame.Angles(0, 0, math.rad(-11.1549))
+        ballClone.Transparency = ballTransparency
+
+        local rootCFrame = CFrame.new(lplr.ball.Position + Vector3.new(-0.6, 2.3, 0))
+            * CFrame.Angles(math.rad(0), math.rad(-180), math.rad(-51.7183))
+
+        for _, data in ipairs(partData) do
+            local clonePart = cloneParts[data.name]
+            if clonePart then
+                clonePart.Transparency = ballTransparency
+                if data.name == 'handle' then
+                    clonePart.Size = Vector3.new(0.10999999940395355, 1.899999976158142, 0.18999959528446198)
+                else
+                    clonePart.Size = Vector3.new(0.6000000238418579, 0.30000001192092896, 0.18999962508678436)
+                end
+                local extraOffset = data.name == 'handle' and Vector3.new(0, 0.77, 0) or Vector3.zero
+                clonePart.CFrame = rootCFrame
+                    * CFrame.new(data.relPos + extraOffset)
+                    * CFrame.fromMatrix(Vector3.zero, data.relRot.XVector, data.relRot.YVector, data.relRot.ZVector)
+            end
+        end
+    end))
+
+    cleanup.add({ Destroy = function() destroyClones() end })
 end)
 
 Rayfield:LoadConfiguration()
