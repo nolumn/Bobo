@@ -86,7 +86,7 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle = 'bobo lite',
     LoadingSubtitle = "by "..table.concat(libstuff['developers'], ', ') or 'inner',
     ShowText = "bobo lite",
-    Theme = 'Amethyst',
+    Theme = 'Ocean',
     ToggleUIKeybind = libstuff['toggle'],
     DisableRayfieldPrompts = true,
     DisableBuildWarnings = true,
@@ -1917,6 +1917,121 @@ runFunction(function()
         end
         playlistSound.Volume = PlaylistVolumeSlider.CurrentValue
         playlistSound.PlaybackSpeed = PlaylistSpeedSlider.CurrentValue
+    end))
+end)
+
+runFunction(function()
+    render:CreateDivider()
+
+    local premadeFaces = {
+        {name = 'Custom', id = ''},
+        {name = 'Default Face', id = 'rbxassetid://111858682543206'},
+        {name = 'White Default Face', id = 'rbxassetid://10184799258'},
+        {name = 'Sideways Default Face', id = 'rbxassetid://16000563171'},
+        {name = ':D', id = 'rbxassetid://17244838360'},
+        {name = '^_^', id = 'rbxassetid://99957094999801'},
+        {name = 'Happy Blush', id = 'rbxassetid://6287342834'},
+        {name = 'Cute Chill Face', id = 'rbxassetid://7235470435'},
+        {name = 'Wow!', id = 'rbxassetid://6113785880'},
+        {name = 'Straight face', id = 'rbxassetid://96522502090962'},
+        {name = 'normal face', id = 'rbxassetid://9208983473'},
+        {name = 'even more normal face', id = 'rbxassetid://6602241122'},
+        {name = 'Serious Face!!', id = 'rbxassetid://5303681402'},
+        {name = 'Man Face', id = 'rbxassetid://5799739939'},
+        {name = 'Sad Face.', id = 'rbxassetid://102000079834063'},
+        {name = 'AHHHH', id = 'rbxassetid://85037001118055'},
+        {name = 'What..?', id = 'rbxassetid://7485602656'},
+        {name = 'EVIL', id = 'rbxassetid://6508288104'},
+        {name = 'Suspicous', id = 'rbxassetid://18636752982'},
+        {name = 'More Suspicous', id = 'rbxassetid://5937011121'},
+        {name = 'Purple Man', id = 'rbxassetid://5113872729'},
+        {name = 'Epic Face', id = 'rbxassetid://14301710584'},
+        {name = 'Troll Face', id = 'rbxassetid://5294554965'},
+        {name = 'Baller', id = 'rbxassetid://110402942731812'},
+        {name = 'obama', id = 'rbxassetid://4968764407'},
+        {name = 'YOUR FACE HERE', id = 'rbxassetid://91130451314773'},
+        {name = 'gift card', id = 'rbxassetid://18364602345'},
+        {name = 'Cat Face', id = 'rbxassetid://15477500214'},
+        {name = 'Cat Face 1', id = 'rbxassetid://6821165844'},
+        {name = 'White Cat Face', id = 'rbxassetid://17186419549'},
+        {name = 'Zombie', id = 'rbxassetid://7157327144'},
+        {name = 'Vampire Face', id = 'rbxassetid://6304604718'},
+        {name = 'Dead.', id = 'rbxassetid://130187161010472'},
+        {name = 'Dream', id = 'rbxassetid://11151151227'},
+        {name = 'zzz...', id = 'rbxassetid://11698917622'},
+        {name = 'sans', id = 'rbxassetid://6671698461'},
+        {name = 'Drakobloxxer', id = 'rbxassetid://97491265149516'},
+        {name = 'bobo', id = 'rbxassetid://10794036784'},
+        {name = 'teardrop bobo', id = 'rbxassetid://85614090385889'},
+        {name = 'god bobo', id = 'rbxassetid://98321179209767'},
+        {name = 'kind of sus bobo', id = 'rbxassetid://13503246365'},
+        {name = 'Tear Bobo™️', id = 'rbxassetid://119604162050079'},
+        {name = 'Python', id = 'rbxassetid://18689314031'},
+        {name = 'Java', id = 'rbxassetid://18689390644'},
+        {name = 'Haskell', id = 'rbxassetid://18689351942'},
+        {name = 'JavaScript', id = 'rbxassetid://18689397624'},
+    }
+
+    local premadeOptions = {}
+    local premadeLookup = {}
+    for _, entry in ipairs(premadeFaces) do
+        table.insert(premadeOptions, entry.name)
+        premadeLookup[entry.name] = entry.id
+    end
+
+    local Face = render:CreateToggle({
+        Name = 'Face',
+        CurrentValue = false,
+        Flag = 'face',
+        Callback = function() end
+    })
+    local FacePremade = render:CreateDropdown({
+        Name = 'Premade Face',
+        Options = premadeOptions,
+        CurrentOption = {'Custom'},
+        Flag = 'face_premade',
+        Callback = function() end
+    })
+    local FaceTexture = render:CreateInput({
+        Name = 'Face Texture',
+        Flag = 'face_texture',
+        PlaceholderText = 'rbxassetid://111858682543206',
+        CurrentValue = 'rbxassetid://111858682543206',
+        Callback = function() end
+    })
+
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'face'
+    billboard.Size = UDim2.new(2.4000001, 0, 1.90000045, 0)
+    billboard.StudsOffset = Vector3.new(0, -0.10000000149011612, 0.6100000143051147)
+    billboard.AlwaysOnTop = true
+    billboard.ResetOnSpawn = false
+
+    local image = Instance.new('ImageLabel')
+    image.Size = UDim2.new(1, 0, 1, 0)
+    image.BackgroundTransparency = 1
+    image.Parent = billboard
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        pcall(function()
+            if not lplr.ball then
+                billboard.Parent = nil
+                return
+            end
+            if Face.CurrentValue then
+                local selected = FacePremade.CurrentOption[1]
+                local tex = (selected ~= 'Custom' and premadeLookup[selected] ~= '')
+                    and premadeLookup[selected]
+                    or FaceTexture.CurrentValue
+                image.Image = tex
+                image.ImageTransparency = lplr.ball.Transparency
+                if billboard.Parent ~= lplr.ball then
+                    billboard.Parent = lplr.ball
+                end
+            else
+                billboard.Parent = nil
+            end
+        end)
     end))
 end)
 
