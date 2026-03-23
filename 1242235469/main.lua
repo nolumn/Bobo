@@ -3032,8 +3032,8 @@ runFunction(function()
 
     local billboard = Instance.new('BillboardGui')
     billboard.Name = 'face'
-    billboard.Size = UDim2.new(2.4000001, 0, 1.90000045, 0)
-    billboard.StudsOffset = Vector3.new(0, -0.10000000149011612, 0.6100000143051147)
+    billboard.Size = UDim2.new(2.20000005, 0, 1.70000052, 0)
+    billboard.StudsOffset = Vector3.new(0, -0.25, 0.6100000143051147)
     billboard.AlwaysOnTop = true
     billboard.ResetOnSpawn = false
 
