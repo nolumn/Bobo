@@ -3040,6 +3040,7 @@ runFunction(function()
     local image = Instance.new('ImageLabel')
     image.Size = UDim2.new(1, 0, 1, 0)
     image.BackgroundTransparency = 1
+    image.Position = UDim2.new(0, 0, 0.0650000051, 0)
     image.Parent = billboard
 
     cleanup.add(runService.RenderStepped:Connect(function()
