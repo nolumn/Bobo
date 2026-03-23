@@ -3523,7 +3523,7 @@ runFunction(function()
         faceBillboard = Instance.new('BillboardGui')
         faceBillboard.Name = 'avatarFace'
         faceBillboard.Size = UDim2.new(2.4, 0, 1.9, 0)
-        faceBillboard.StudsOffset = Vector3.new(0, -0.1, 0.61)
+        faceBillboard.StudsOffset = Vector3.new(0, -0.2500000298023224, 0.6100000143051147)
         faceBillboard.AlwaysOnTop = true
         faceBillboard.ResetOnSpawn = false
         faceImage = Instance.new('ImageLabel')
