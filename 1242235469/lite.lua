@@ -2786,4 +2786,125 @@ runFunction(function()
     cleanup.add({ Destroy = function() cleanupAll() end })
 end)
 
+runFunction(function()
+    render:CreateDivider()
+
+    local hats = {
+        {
+            name = 'Party Hat',
+            meshId = 'http://www.roblox.com/asset/?id=1778999',
+            texId = 'http://www.roblox.com/asset/?id=1778994',
+            offsetX = 0,
+            offsetY = 0.75,
+            offsetZ = 0,
+            rotX = 0,
+            rotY = 0,
+            rotZ = 0,
+            scale = 1.1,
+        },
+        {
+            name = 'Propeller',
+            meshId = 'http://www.roblox.com/asset/?id=10684744',
+            texId = 'http://www.roblox.com/asset/?id=10684749',
+            offsetX = 0,
+            offsetY = 0.1,
+            offsetZ = 0,
+            rotX = 0,
+            rotY = 0,
+            rotZ = 0,
+            scale = 1.6,
+        },
+        {
+            name = 'Slide',
+            meshId = 'rbxassetid://30554911',
+            texId = 'rbxassetid://30554933',
+            offsetX = 0,
+            offsetY = 0.6,
+            offsetZ = 0,
+            rotX = 0,
+            rotY = 110,
+            rotZ = 0,
+            scale = 1.9,
+        },
+    }
+
+    local hatNames = {}
+    local hatLookup = {}
+    for _, h in ipairs(hats) do
+        table.insert(hatNames, h.name)
+        hatLookup[h.name] = h
+    end
+
+    local hatPart = nil
+    local hatMesh = nil
+    local currentHat = nil
+    local selectedHatName = hatNames[1]
+
+    local destroyHat = function()
+        if hatPart then hatPart:Destroy() hatPart = nil hatMesh = nil end
+        currentHat = nil
+    end
+
+    local makeHat = function(hat)
+        destroyHat()
+        if not hat then return end
+        hatPart = Instance.new('Part')
+        hatPart.Name = 'MoreHats_Part'
+        hatPart.Anchored = true
+        hatPart.CanCollide = false
+        hatPart.CastShadow = false
+        hatPart.Size = Vector3.new(1, 1, 1)
+        hatPart.TopSurface = Enum.SurfaceType.Smooth
+        hatPart.BottomSurface = Enum.SurfaceType.Smooth
+        hatPart.Transparency = 1
+        hatPart.Parent = workspace
+        hatMesh = Instance.new('SpecialMesh')
+        hatMesh.MeshType = Enum.MeshType.FileMesh
+        hatMesh.MeshId = hat.meshId
+        hatMesh.TextureId = hat.texId or ''
+        hatMesh.Scale = Vector3.new(hat.scale, hat.scale, hat.scale)
+        hatMesh.Parent = hatPart
+        currentHat = hat
+    end
+
+    local MoreHatsToggle = render:CreateToggle({
+        Name = 'MoreHats',
+        CurrentValue = false,
+        Flag = 'more_hats_toggle',
+        Callback = function(val)
+            if val then
+                makeHat(hatLookup[selectedHatName])
+            else
+                destroyHat()
+            end
+        end,
+    })
+
+    render:CreateDropdown({
+        Name = 'Hat',
+        Options = hatNames,
+        CurrentOption = {hatNames[1]},
+        Flag = 'more_hats_select',
+        Callback = function(val)
+            selectedHatName = val[1]
+            if MoreHatsToggle.CurrentValue then
+                makeHat(hatLookup[selectedHatName])
+            end
+        end,
+    })
+
+    cleanup.add(runService.RenderStepped:Connect(function()
+        if not hatPart or not currentHat then return end
+        local ball = lplr.ball
+        if not ball then return end
+        local h = currentHat
+        hatPart.CFrame =
+            CFrame.new(ball.Position + Vector3.new(h.offsetX, ball.Size.Y / 2 + h.offsetY, h.offsetZ))
+            * CFrame.Angles(math.rad(h.rotX), math.rad(h.rotY), math.rad(h.rotZ))
+        hatPart.Transparency = ball.Transparency
+    end))
+
+    cleanup.add({Destroy = function() destroyHat() end})
+end)
+
 Rayfield:LoadConfiguration()
